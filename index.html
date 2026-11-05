@@ -1762,36 +1762,178 @@
       drawHistory = drawHistory.filter(d => d.concurso !== conc);
       drawHistory.push({ concurso: conc, dezenas: nums });
       drawHistory.sort((a, b) => a.concurso - b.concurso);
-      document.getElementById('inputConcursoAlvo').value = drawHistory[drawHistory.length - 1].concurso + 1;
-      document.getElementById('inputNewConc').value = drawHistory[drawHistory.length - 1].concurso + 1;
+      const nextConc = drawHistory[drawHistory.length - 1].concurso + 1;
+
+      // Atualiza automaticamente o concurso alvo do gerador para o próximo!
+      document.getElementById('inputConcursoAlvo').value = nextConc;
+      document.getElementById('inputNewConc').value = nextConc;
+      document.getElementById('headerConcurso').textContent = nextConc;
+      document.getElementById('lblConcStatus').textContent = nextConc;
       document.getElementById('inputNewBalls').value = '';
-      showToast(`Concurso ${conc} adicionado. Clique em “Gerar jogos agora” para criar os palpites recalibrados.`);
+
+      const countSaved = savedCsvRows.filter(r => r.concurso_alvo === nextConc).length;
+      document.getElementById('lblSeqCount').textContent = `${countSaved} jogos salvos`;
+
+      saveStateToStorage();
+      renderHistoryTable();
+      populateConfDropdowns();
+      refreshCsvTextarea();
+
+      showToast(`✅ Concurso ${conc} salvo com sucesso! O concurso alvo foi atualizado automaticamente para o ${nextConc}.`);
     }
 
-    async function fetchLatestDrawsOnline() {
-      showToast('Buscando últimos sorteios da Lotofácil online...');
+    function parseAnyDrawData(raw) {
+      if (!raw) return [];
+      // Caso 1: Array de concursos
+      if (Array.isArray(raw)) {
+        return raw.map(item => {
+          const c = Number(item.numero || item.concurso || item.concurso_numero || item.id);
+          const rawBalls = item.listaDezenas || item.dezenas || item.resultado || item.numeros || [];
+          const dezenas = Array.isArray(rawBalls)
+            ? rawBalls.map(Number).filter(n => n >= 1 && n <= 25).sort((a, b) => a - b)
+            : [];
+          return (c > 0 && dezenas.length === 15) ? { concurso: c, dezenas } : null;
+        }).filter(Boolean);
+      }
+      // Caso 2: Objeto único (ex: último concurso da API da CAIXA ou BrasilAPI)
+      if (typeof raw === 'object') {
+        const c = Number(raw.numero || raw.concurso || raw.concurso_numero || raw.id);
+        const rawBalls = raw.listaDezenas || raw.dezenas || raw.resultado || raw.numeros || [];
+        const dezenas = Array.isArray(rawBalls)
+          ? rawBalls.map(Number).filter(n => n >= 1 && n <= 25).sort((a, b) => a - b)
+          : [];
+        if (c > 0 && dezenas.length === 15) {
+          return [{ concurso: c, dezenas }];
+        }
+      }
+      return [];
+    }
+
+    async function fetchFromSingleSource(url, timeoutMs = 4000) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
       try {
-        const resp = await fetch('https://loteriascaixa-api.herokuapp.com/api/lotofacil');
-        if (!resp.ok) throw new Error('Falha na API');
+        const resp = await fetch(url, {
+          signal: controller.signal,
+          headers: { 'Accept': 'application/json' }
+        });
+        clearTimeout(timer);
+        if (!resp.ok) return null;
         const data = await resp.json();
-        if (Array.isArray(data) && data.length >= 10) {
-          const parsed = data.slice(0, 15).map(item => ({
-            concurso: Number(item.concurso),
-            dezenas: item.dezenas.map(Number).sort((a, b) => a - b)
-          })).filter(d => d.dezenas.length === 15).sort((a, b) => a.concurso - b.concurso);
-          if (parsed.length >= 10) {
-            drawHistory = parsed.slice(-10);
-            const nextC = drawHistory[drawHistory.length - 1].concurso + 1;
-            document.getElementById('inputConcursoAlvo').value = nextC;
-            document.getElementById('inputNewConc').value = nextC;
-            refreshCsvTextarea();
-            showToast(`Sorteios sincronizados até o Concurso ${nextC - 1}. Clique em “Gerar jogos agora” quando quiser criar os palpites.`);
-            return;
+        return parseAnyDrawData(data);
+      } catch (e) {
+        clearTimeout(timer);
+        return null;
+      }
+    }
+
+    function onNewDrawsDetected(detectedDraws, sourceName, silent = false) {
+      let addedCount = 0;
+      let highestDetected = 0;
+      for (const d of detectedDraws) {
+        if (!d || d.dezenas.length !== 15) continue;
+        highestDetected = Math.max(highestDetected, d.concurso);
+        const exists = drawHistory.some(existing => existing.concurso === d.concurso);
+        if (!exists) {
+          drawHistory.push(d);
+          addedCount++;
+        } else {
+          // Atualiza caso dezenas tenham chegado incompletas
+          const idx = drawHistory.findIndex(existing => existing.concurso === d.concurso);
+          if (idx !== -1 && drawHistory[idx].dezenas.length !== 15) {
+            drawHistory[idx] = d;
           }
         }
-        throw new Error('Formato inesperado');
-      } catch (err) {
-        showToast('Modo offline ativo: usando base interna (Concursos 3811 a 3820).');
+      }
+      drawHistory.sort((a, b) => a.concurso - b.concurso);
+
+      const maxKnown = drawHistory[drawHistory.length - 1].concurso;
+      const nextTarget = maxKnown + 1;
+      const inputTarget = document.getElementById('inputConcursoAlvo');
+      const inputNewC = document.getElementById('inputNewConc');
+      const lblHeaderC = document.getElementById('headerConcurso');
+      const lblStatusC = document.getElementById('lblConcStatus');
+
+      const oldTarget = parseInt(inputTarget.value, 10);
+      // REGRA MESTRA: Quando detectar novo concurso salvo/extraído,
+      // o concurso alvo do gerador de jogos MUDA PARA O PRÓXIMO CONCURSO AUTOMATICAMENTE!
+      if (nextTarget !== oldTarget || addedCount > 0) {
+        inputTarget.value = nextTarget;
+        if (inputNewC) inputNewC.value = nextTarget;
+        if (lblHeaderC) lblHeaderC.textContent = nextTarget;
+        if (lblStatusC) lblStatusC.textContent = nextTarget;
+
+        const countSaved = savedCsvRows.filter(r => r.concurso_alvo === nextTarget).length;
+        const lblSeq = document.getElementById('lblSeqCount');
+        if (lblSeq) lblSeq.textContent = `${countSaved} jogos salvos`;
+      }
+
+      saveStateToStorage();
+      renderHistoryTable();
+      populateConfDropdowns();
+      refreshCsvTextarea();
+
+      if (!silent) {
+        if (addedCount > 0) {
+          showToast(`✅ ${sourceName}: Concurso ${highestDetected} detectado! Concurso alvo atualizado automaticamente para ${nextTarget}.`);
+        } else {
+          showToast(`Sorteios sincronizados via ${sourceName} (Mais recente: ${maxKnown} -> Alvo: ${nextTarget}).`);
+        }
+      }
+    }
+
+    async function fetchLatestDrawsOnline(options = {}) {
+      const silent = options.silent === true;
+      if (!silent) showToast('Consultando API da CAIXA e fontes oficiais da Lotofácil...');
+
+      // Fontes em cascata por ordem de prioridade e velocidade:
+      // 1. API Oficial da CAIXA (Direta)
+      // 2. API Oficial da CAIXA via CORS Proxies (AllOrigins e CorsProxy.io)
+      // 3. BrasilAPI (Pública, espelho direto)
+      // 4. Guidi API (Especializada em loterias)
+      // 5. LoteriasCaixa API (Mirror)
+      const sources = [
+        {
+          name: 'API da CAIXA (Oficial Direta)',
+          url: 'https://servicebus2.caixa.gov.br/portaldeloterias/api/lotofacil'
+        },
+        {
+          name: 'API da CAIXA (via AllOrigins)',
+          url: 'https://api.allorigins.win/raw?url=https%3A%2F%2Fservicebus2.caixa.gov.br%2Fportaldeloterias%2Fapi%2Flotofacil'
+        },
+        {
+          name: 'API da CAIXA (via CorsProxy)',
+          url: 'https://corsproxy.io/?url=https%3A%2F%2Fservicebus2.caixa.gov.br%2Fportaldeloterias%2Fapi%2Flotofacil'
+        },
+        {
+          name: 'BrasilAPI (Loterias)',
+          url: 'https://brasilapi.com.br/api/loteria/v1/lotofacil'
+        },
+        {
+          name: 'API Guidi Loterias',
+          url: 'https://api.guidi.dev.br/loteria/lotofacil/ultimo'
+        },
+        {
+          name: 'Mirror LoteriasCaixa Heroku',
+          url: 'https://loteriascaixa-api.herokuapp.com/api/lotofacil'
+        }
+      ];
+
+      for (const src of sources) {
+        try {
+          const draws = await fetchFromSingleSource(src.url, 4500);
+          if (draws && draws.length > 0) {
+            onNewDrawsDetected(draws, src.name, silent);
+            return;
+          }
+        } catch (e) {
+          // Tenta a próxima fonte da lista
+        }
+      }
+
+      if (!silent) {
+        const maxKnown = drawHistory[drawHistory.length - 1].concurso;
+        showToast(`Modo offline ativo: base com Concurso ${maxKnown} carregada (Alvo: ${maxKnown + 1}).`);
       }
     }
 
@@ -2277,6 +2419,7 @@
     function saveStateToStorage() {
       try {
         localStorage.setItem('omega_v3_csv_rows', JSON.stringify(savedCsvRows));
+        localStorage.setItem('omega_v4_draw_history', JSON.stringify(drawHistory));
       } catch (e) {}
     }
 
@@ -2292,6 +2435,13 @@
       try {
         const raw = localStorage.getItem('omega_v3_csv_rows');
         if (raw) savedCsvRows = JSON.parse(raw) || [];
+        const rawHistory = localStorage.getItem('omega_v4_draw_history');
+        if (rawHistory) {
+          const parsedHistory = JSON.parse(rawHistory);
+          if (Array.isArray(parsedHistory) && parsedHistory.length >= 5) {
+            drawHistory = parsedHistory;
+          }
+        }
         const repo = localStorage.getItem('omega_v3_gh_repo');
         if (repo) document.getElementById('ghOwnerRepo').value = repo;
         const br = localStorage.getItem('omega_v3_gh_branch');
@@ -2303,27 +2453,43 @@
 
     window.addEventListener('DOMContentLoaded', () => {
       loadStateFromStorage();
+
+      // Ajusta automaticamente o concurso alvo na abertura para o próximo do histórico conhecido
+      const maxKnownDraw = drawHistory.length ? Math.max(...drawHistory.map(d => d.concurso)) : 3821;
+      const autoTarget = maxKnownDraw + 1;
+      document.getElementById('inputConcursoAlvo').value = autoTarget;
+      document.getElementById('inputNewConc').value = autoTarget;
+      document.getElementById('headerConcurso').textContent = autoTarget;
+      document.getElementById('lblConcStatus').textContent = autoTarget;
+
+      const countSaved = savedCsvRows.filter(r => r.concurso_alvo === autoTarget).length;
+      document.getElementById('lblSeqCount').textContent = `${countSaved} jogos salvos`;
+
       updateCostPreview();
       renderChampionScoreGrid();
+
       const lastD = drawHistory[drawHistory.length - 1];
       if (lastD) {
         confSelectedBalls = new Set(lastD.dezenas);
         document.getElementById('inputConfDezenas').value = lastD.dezenas.map(x => String(x).padStart(2, '0')).join(' ');
       }
       renderConfBallSelector();
-      updateCostPreview();
       refreshCsvTextarea();
       document.getElementById('tbodyGames').innerHTML = '<tr><td colspan="10" class="py-8 text-center text-slate-500">Nenhum lote novo foi gerado. Configure o concurso, a quantidade de jogos e as dezenas; depois clique em “Gerar jogos agora”.</td></tr>';
       document.getElementById('headerRangeTag').textContent = 'Aguardando geração manual';
       populateConfDropdowns();
+
       const latestSavedTarget = savedCsvRows.length
         ? Math.max(...savedCsvRows.map(r => Number(r.concurso_alvo) || 0))
-        : Number(document.getElementById('inputConcursoAlvo').value);
+        : autoTarget;
       const confSelect = document.getElementById('selectConfConcurso');
       if (confSelect && latestSavedTarget) {
         confSelect.value = String(latestSavedTarget);
         onChangeConfConcurso();
       }
+
+      // Verificação em segundo plano na API da CAIXA / fontes oficiais
+      fetchLatestDrawsOnline({ silent: true });
     });
   </script>
 </body>

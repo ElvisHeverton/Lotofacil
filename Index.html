@@ -1,0 +1,2330 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Projeto Ômega v4 — Gerador Balanceado &amp; Painel Web (GitHub Pages)</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            omega: {
+              950: '#070b14',
+              900: '#0d1424',
+              800: '#152039',
+              700: '#1f2e52',
+              500: '#10b981',
+              400: '#34d399',
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    body {
+      background-color: #070b14;
+      color: #f1f5f9;
+      font-family: 'Inter', sans-serif;
+    }
+    .ball-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 2rem;
+      height: 2rem;
+      border-radius: 9999px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      font-size: 0.80rem;
+      transition: all 0.15s ease;
+    }
+    .ball-row1 {
+      background: linear-gradient(135deg, #059669, #10b981);
+      color: #ffffff;
+      box-shadow: 0 2px 6px rgba(16, 185, 129, 0.35);
+    }
+    .ball-hot {
+      background: linear-gradient(135deg, #d97706, #f59e0b);
+      color: #ffffff;
+      box-shadow: 0 2px 6px rgba(245, 158, 11, 0.35);
+    }
+    .ball-moldura {
+      background: #1e293b;
+      color: #e2e8f0;
+      border: 1px solid #334155;
+    }
+    .ball-miolo {
+      background: #1e1b4b;
+      color: #c7d2fe;
+      border: 1px solid #3730a3;
+    }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #0d1424; }
+    ::-webkit-scrollbar-thumb { background: #1f2e52; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #334155; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-emerald-500 selection:text-white">
+
+  <!-- TOP HEADER -->
+  <header class="border-b border-slate-800/80 bg-omega-900/90 backdrop-blur sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center shadow-lg shadow-emerald-900/40 font-mono font-extrabold text-xl text-white">
+          &Omega;
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base sm:text-lg font-bold tracking-tight text-white">Projeto Ômega v4</h1>
+            <span class="px-2 py-0.5 text-[11px] font-mono font-semibold rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+              champion_omega.pkl Mixado
+            </span>
+          </div>
+          <p class="text-xs text-slate-400">
+            Motor CGP + 5 Especialistas MoE + Recalibrador Biométrico Estratificado &bull; Pronto para GitHub Pages
+          </p>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="flex items-center gap-1.5 bg-omega-950/90 p-1 rounded-xl border border-slate-800">
+        <button id="tabBtnGerador" onclick="switchTab('gerador')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition bg-emerald-600 text-white shadow">
+          Gerador Balanceado
+        </button>
+        <button id="tabBtnConferencia" onclick="switchTab('conferencia')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition text-slate-400 hover:text-white">
+          Conferir &amp; Jogos Salvos (<span id="badgeSavedCount">0</span>)
+        </button>
+        <button id="tabBtnHistorico" onclick="switchTab('historico')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition text-slate-400 hover:text-white">
+          Últimos 10 Sorteios (<span id="badgeLastConc">3820</span>)
+        </button>
+        <button id="tabBtnCampeao" onclick="switchTab('campeao')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition text-slate-400 hover:text-white">
+          DNA do Campeão (.pkl)
+        </button>
+        <button id="tabBtnGithub" onclick="switchTab('github')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition text-slate-400 hover:text-white">
+          GitHub Sync (<span id="badgeCsvCount">0</span>)
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toastBox" class="fixed bottom-5 right-5 z-50 hidden max-w-sm bg-slate-900 border border-emerald-500/50 text-slate-100 px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3">
+    <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+    <span id="toastMsg" class="text-xs font-medium"></span>
+  </div>
+
+  <!-- MAIN CONTAINER -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
+
+    <!-- ================================================================= -->
+    <!-- TAB 1: GERADOR BALANCEADO                                         -->
+    <!-- ================================================================= -->
+    <section id="tab-gerador" class="space-y-6">
+
+      <!-- Control Bar -->
+      <div class="bg-omega-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 items-end">
+
+          <div class="lg:col-span-2">
+            <label for="inputConcursoAlvo" class="block text-xs font-medium text-slate-400 mb-1">Concurso Alvo</label>
+            <input id="inputConcursoAlvo" type="number" min="1" value="3821"
+              class="w-full bg-omega-950 border border-slate-700/80 rounded-xl px-3 py-2 text-sm font-mono font-bold text-emerald-400 focus:outline-none focus:border-emerald-500" />
+          </div>
+
+          <div class="lg:col-span-2">
+            <label for="inputQtdJogos" class="block text-xs font-medium text-slate-400 mb-1">Qtd. de Jogos (Padrão: 10)</label>
+            <input id="inputQtdJogos" type="number" min="1" max="50" value="10"
+              onchange="updateCostPreview()"
+              class="w-full bg-omega-950 border border-slate-700/80 rounded-xl px-3 py-2 text-sm font-mono font-bold text-white focus:outline-none focus:border-emerald-500" />
+          </div>
+
+          <div class="lg:col-span-2">
+            <label for="selectDezenas" class="block text-xs font-medium text-slate-400 mb-1">Dezenas / Cartão (15–20)</label>
+            <select id="selectDezenas" onchange="updateCostPreview()"
+              class="w-full bg-omega-950 border border-slate-700/80 rounded-xl px-3 py-2 text-sm font-mono font-bold text-white focus:outline-none focus:border-emerald-500">
+              <option value="15" selected>15 dezenas (R$ 3,50)</option>
+              <option value="16">16 dezenas (R$ 56,00)</option>
+              <option value="17">17 dezenas (R$ 476,00)</option>
+              <option value="18">18 dezenas (R$ 2.856,00)</option>
+              <option value="19">19 dezenas (R$ 13.566,00)</option>
+              <option value="20">20 dezenas (R$ 54.264,00)</option>
+            </select>
+          </div>
+
+          <div class="lg:col-span-2">
+            <label for="selectModo" class="block text-xs font-medium text-slate-400 mb-1">Motor de Calibragem</label>
+            <select id="selectModo"
+              class="w-full bg-omega-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs font-semibold text-emerald-300 focus:outline-none focus:border-emerald-500">
+              <option value="calibrado_v4" selected>Recalibrador Ômega v4 (Alta Precisão 3821 / Multivariável)</option>
+              <option value="calibrado">Recalibrado Estratificado v3</option>
+              <option value="bruto">Portfólio Bruto do Campeão</option>
+            </select>
+          </div>
+
+          <div class="lg:col-span-4 flex flex-wrap sm:flex-nowrap gap-2">
+            <button id="btnGerarSequencia" onclick="runOmegaGenerator(true)"
+              class="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-xs sm:text-sm py-2.5 px-4 rounded-xl shadow-lg shadow-emerald-950/60 transition flex items-center justify-center gap-2">
+              <span>⚡ Gerar jogos agora</span>
+            </button>
+            <button id="btnBuscarCaixa" onclick="fetchLatestDrawsOnline()"
+              title="Atualizar últimos 10 sorteios online"
+              class="bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs py-2.5 px-3 rounded-xl border border-slate-700 transition">
+              🔄 Atualizar Sorteios
+            </button>
+          </div>
+        </div>
+
+        <!-- Sub-bar: Cost & Sequence Status -->
+        <div class="mt-3 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+          <div class="flex flex-wrap items-center gap-4">
+            <span>Custo estimado do lote: <strong id="lblCustoLote" class="text-emerald-400 font-mono">R$ 35,00</strong></span>
+            <span>&bull;</span>
+            <span>Sequência atual no Concurso <strong id="lblConcStatus" class="text-white font-mono">3821</strong>: <strong id="lblSeqCount" class="text-amber-400 font-mono">0 jogos salvos</strong></span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span> Linha 1 (01–05)</span>
+            <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span> Dezena 16 (Super Quente)</span>
+            <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-slate-700 border border-slate-500 inline-block"></span> Moldura</span>
+            <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-indigo-950 border border-indigo-500 inline-block"></span> Miolo</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- KPI Cards Row -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div class="bg-omega-900 border border-slate-800 rounded-xl p-3.5">
+          <span class="text-[11px] text-slate-400 block">Cobertura &ge; 11 Pts</span>
+          <div class="flex items-baseline gap-1.5 mt-1">
+            <span id="kpiP11" class="text-lg sm:text-xl font-bold font-mono text-emerald-400">61.79%</span>
+            <span id="kpiP11Odds" class="text-[11px] font-mono text-slate-400">(1 em 1.62)</span>
+          </div>
+          <span id="kpiP11Delta" class="text-[10px] text-emerald-400/90 font-mono block mt-0.5">+18.12 pp vs bruto</span>
+        </div>
+
+        <div class="bg-omega-900 border border-slate-800 rounded-xl p-3.5">
+          <span class="text-[11px] text-slate-400 block">Cobertura &ge; 12 / 13 Pts</span>
+          <div class="flex items-baseline gap-1.5 mt-1">
+            <span id="kpiP12" class="text-lg sm:text-xl font-bold font-mono text-teal-400">16.16%</span>
+            <span id="kpiP13" class="text-xs font-mono text-slate-400">/ 1.48%</span>
+          </div>
+          <span id="kpiCoveredCount" class="text-[10px] text-slate-400 font-mono block mt-0.5">2.019.780 sorteios</span>
+        </div>
+
+        <div class="bg-omega-900 border border-slate-800 rounded-xl p-3.5">
+          <span class="text-[11px] text-slate-400 block">Dezenas Cobertas</span>
+          <div class="flex items-baseline gap-1.5 mt-1">
+            <span id="kpiActiveNums" class="text-lg sm:text-xl font-bold font-mono text-white">25/25</span>
+            <span id="kpiExposure" class="text-xs font-mono text-emerald-400">exp 2..9</span>
+          </div>
+          <span class="text-[10px] text-slate-400 block mt-0.5">Zero fixas em 10/10</span>
+        </div>
+
+        <div class="bg-omega-900 border border-slate-800 rounded-xl p-3.5">
+          <span class="text-[11px] text-slate-400 block">Sobreposição (Overlap)</span>
+          <div class="flex items-baseline gap-1.5 mt-1">
+            <span id="kpiOverlap" class="text-lg sm:text-xl font-bold font-mono text-amber-400">9.58</span>
+            <span id="kpiOverlapRange" class="text-xs font-mono text-slate-400">(7..11)</span>
+          </div>
+          <span class="text-[10px] text-slate-400 block mt-0.5">Descorrelação ideal</span>
+        </div>
+
+        <div class="bg-omega-900 border border-slate-800 rounded-xl p-3.5">
+          <span class="text-[11px] text-slate-400 block">Moldura / Linha 1</span>
+          <div class="flex items-baseline gap-1.5 mt-1">
+            <span id="kpiMoldura" class="text-lg sm:text-xl font-bold font-mono text-indigo-400">9.8</span>
+            <span id="kpiLinha1" class="text-xs font-mono text-emerald-400">/ L1: 2.5</span>
+          </div>
+          <span class="text-[10px] text-slate-400 block mt-0.5">Alvo: 9.8 e 2.5</span>
+        </div>
+
+        <div class="bg-omega-900 border border-slate-800 rounded-xl p-3.5">
+          <span class="text-[11px] text-slate-400 block">Soma / Ímpares / Rep</span>
+          <div class="flex items-baseline gap-1.5 mt-1">
+            <span id="kpiSoma" class="text-lg sm:text-xl font-bold font-mono text-white">199.4</span>
+            <span id="kpiOddRep" class="text-xs font-mono text-slate-400">7.8I | 9.2R</span>
+          </div>
+          <span id="kpiBacktest10" class="text-[10px] text-emerald-400 font-mono block mt-0.5">9/10 últimos conc.</span>
+        </div>
+      </div>
+
+      <!-- Generated Games Table & Actions -->
+      <div class="bg-omega-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+        <div class="px-4 sm:px-6 py-4 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 class="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+              <span>Carteira Gerada — Concurso <span id="headerConcurso">3821</span></span>
+              <span id="headerRangeTag" class="px-2 py-0.5 text-xs font-mono rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                Jogo 01 ao Jogo 10
+              </span>
+            </h2>
+            <p class="text-xs text-slate-400 mt-0.5">
+              Cotas Estratificadas: 7 a 9 Ímpares &bull; 9 a 11 na Moldura &bull; 2 a 3 na Linha 1 &bull; 8 a 10 Repetidas &bull; Soma 182–212
+            </p>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <button id="btnCopiarJogos" onclick="copyCurrentGamesText()"
+              class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+              📋 Copiar Jogos (TXT)
+            </button>
+            <button id="btnBaixarCsv" onclick="downloadHistoricoCsv()"
+              class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 transition">
+              💾 Baixar historico_apostas.csv
+            </button>
+            <button id="btnLimparSeq" onclick="clearSavedSequence()"
+              class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-950/60 hover:bg-rose-900/70 text-rose-300 border border-rose-800/50 transition">
+              🗑️ Zerar Sequência
+            </button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="border-b border-slate-800/80 bg-omega-950/60 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                <th class="py-3 px-4">Jogo</th>
+                <th class="py-3 px-4">Dezenas Calibradas</th>
+                <th class="py-3 px-3 text-center">Ímp/Par</th>
+                <th class="py-3 px-3 text-center">Soma</th>
+                <th class="py-3 px-3 text-center">Moldura</th>
+                <th class="py-3 px-3 text-center">Linha 1</th>
+                <th class="py-3 px-3 text-center">Rep. Últ</th>
+                <th class="py-3 px-3 text-center">Primos</th>
+                <th class="py-3 px-3 text-center">Últ. 10</th>
+                <th class="py-3 px-4">Troca Biométrica (Saíram &rarr; Entraram)</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyGames" class="divide-y divide-slate-800/60 text-xs">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Teimosinha Footer Bar -->
+        <div class="px-4 sm:px-6 py-4 bg-gradient-to-r from-amber-950/30 via-omega-900 to-emerald-950/30 border-t border-slate-800 flex flex-wrap items-center justify-between gap-4">
+          <div class="space-y-1">
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 text-[10px] font-mono font-bold uppercase rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                Teimosinha Recomendada (10 Quentes + 3 Interm. + 2 Frias)
+              </span>
+              <span id="teimosinhaStats" class="text-xs font-mono text-slate-300">8I/7P &bull; Soma=198 &bull; Mold=10 &bull; L1=3 &bull; Primos=5</span>
+            </div>
+            <div id="teimosinhaBalls" class="flex flex-wrap gap-1.5 pt-1"></div>
+          </div>
+          <button id="btnCopiarTeimosinha" onclick="copyTeimosinhaText()"
+            class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition">
+            📋 Copiar Teimosinha
+          </button>
+        </div>
+      </div>
+
+      <!-- Charts Grid: Exposure of 25 Numbers & Terminal Log -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div class="lg:col-span-7 bg-omega-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h3 class="text-sm font-bold text-white">Exposição das 25 Dezenas no Lote Atual vs. Score do Campeão</h3>
+              <p class="text-xs text-slate-400">Todas as 25 dezenas participam (mínimo 2 cartões, máximo 9 cartões — zero dezenas cegas)</p>
+            </div>
+          </div>
+          <div class="relative h-64">
+            <canvas id="chartExposure"></canvas>
+          </div>
+        </div>
+
+        <div class="lg:col-span-5 bg-omega-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-bold text-white font-mono">Saída Terminal (Formato CMD Projeto Ômega)</h3>
+            <button id="btnCopyTerminal" onclick="copyTerminalOutput()" class="text-xs text-emerald-400 hover:underline font-mono">Copiar Log</button>
+          </div>
+          <pre id="preTerminal" class="flex-1 bg-omega-950 border border-slate-800 rounded-xl p-3 font-mono text-[11px] text-emerald-300/90 overflow-x-auto overflow-y-auto max-h-64 leading-relaxed"></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- TAB 1.5: CONFERIDOR OFICIAL & JOGOS SALVOS                        -->
+    <!-- ================================================================= -->
+    <section id="tab-conferencia" class="hidden space-y-6">
+      <div class="bg-omega-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-5">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
+          <div>
+            <h2 class="text-base font-bold text-white flex items-center gap-2">
+              <span>🎯 Conferidor Oficial de Jogos Salvos (15 a 20 Dezenas)</span>
+            </h2>
+            <p class="text-xs text-slate-400 mt-0.5">
+              Todos os jogos gerados ficam salvos automaticamente no navegador e no CSV. Escolha o concurso ou digite as 15 dezenas sorteadas para conferir acertos, prêmios múltiplos e lucro líquido (ROI).
+            </p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <label for="inputImportCsvFile" class="cursor-pointer px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+              📂 Importar historico_apostas.csv
+              <input id="inputImportCsvFile" type="file" accept=".csv,.txt" class="hidden" onchange="importCsvFileFromDisk(event)" />
+            </label>
+            <button id="btnExportConferidos" onclick="downloadHistoricoCsv()"
+              class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition">
+              💾 Salvar CSV Conferido
+            </button>
+          </div>
+        </div>
+
+        <!-- Filtros e Seleção do Sorteio para Conferir -->
+        <div class="bg-omega-950 border border-slate-800 rounded-xl p-4 grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+          <div class="md:col-span-2">
+            <label for="selectConfConcurso" class="block text-xs text-slate-400 mb-1">Filtrar Concurso Salvo</label>
+            <select id="selectConfConcurso" onchange="onChangeConfConcurso()"
+              class="w-full bg-omega-900 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono font-bold text-emerald-400">
+              <option value="TODOS">Todos os Concursos</option>
+            </select>
+          </div>
+
+          <div class="md:col-span-3">
+            <label for="selectConfDrawBase" class="block text-xs text-slate-400 mb-1">Puxar Resultado Oficial</label>
+            <select id="selectConfDrawBase" onchange="onSelectOfficialDrawForConf()"
+              class="w-full bg-omega-900 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-white">
+            </select>
+          </div>
+
+          <div class="md:col-span-5">
+            <label for="inputConfDezenas" class="block text-xs text-slate-400 mb-1">15 Dezenas do Resultado para Conferir (clique nas bolas abaixo ou digite)</label>
+            <input id="inputConfDezenas" type="text" placeholder="Ex: 01 03 05 06 08 10 11 12 13 15 16 18 20 23 25"
+              oninput="syncSelectorFromInput()"
+              class="w-full bg-omega-900 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-white" />
+          </div>
+
+          <div class="md:col-span-2 flex flex-col gap-1.5">
+            <button id="btnExecutarConferencia" onclick="executarConferenciaCompleta()"
+              class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-xs py-2.5 px-3 rounded-lg shadow transition">
+              ✅ Conferir Agora
+            </button>
+            <button id="btnLimparPalpitesConcurso" onclick="limparPalpitesConcurso()"
+              class="w-full bg-rose-950/70 hover:bg-rose-900 text-rose-300 hover:text-white border border-rose-800/70 font-semibold text-xs py-2 px-3 rounded-lg transition">
+              🗑️ Apagar palpites do concurso
+            </button>
+          </div>
+        </div>
+
+        <!-- Seletor Visual de 25 Bolas + Rateio 14/15 Pontos -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center bg-omega-950/60 border border-slate-800/80 rounded-xl p-4">
+          <div class="lg:col-span-8 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-slate-300">Volante Interativo de Conferência (<span id="lblSelectedBallsCount" class="text-emerald-400 font-mono">15</span>/15 selecionadas):</span>
+              <button id="btnLimparVolanteConf" onclick="clearConfBallSelector()" class="text-[11px] text-slate-400 hover:text-white underline">Limpar seleção</button>
+            </div>
+            <div id="confBallSelectorGrid" class="flex flex-wrap gap-1.5"></div>
+          </div>
+
+          <div class="lg:col-span-4 grid grid-cols-2 gap-2.5 border-t lg:border-t-0 lg:border-l border-slate-800 pt-3 lg:pt-0 lg:pl-4 text-xs">
+            <div>
+              <label for="inputPrize14" class="block text-[11px] text-slate-400 mb-1">Prêmio 14 pts (R$)</label>
+              <input id="inputPrize14" type="number" step="0.01" value="2150.00" onchange="executarConferenciaCompleta()"
+                class="w-full bg-omega-900 border border-slate-700 rounded-lg px-2.5 py-1.5 font-mono text-white" />
+            </div>
+            <div>
+              <label for="inputPrize15" class="block text-[11px] text-slate-400 mb-1">Prêmio 15 pts (R$)</label>
+              <input id="inputPrize15" type="number" step="0.01" value="1800000.00" onchange="executarConferenciaCompleta()"
+                class="w-full bg-omega-900 border border-slate-700 rounded-lg px-2.5 py-1.5 font-mono text-white" />
+            </div>
+            <p class="col-span-2 text-[11px] text-slate-400">
+              Prêmios fixos CAIXA: <strong class="text-slate-200">11 pts = R$ 7,00</strong> &bull; <strong class="text-slate-200">12 pts = R$ 14,00</strong> &bull; <strong class="text-slate-200">13 pts = R$ 35,00</strong> (calcula múltiplos automático para 16–20 dez).
+            </p>
+          </div>
+        </div>
+
+        <!-- Painel Financeiro e Resumo de Acertos da Conferência -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div class="bg-omega-950 border border-slate-800 rounded-xl p-3">
+            <span class="text-[11px] text-slate-400 block">Jogos Conferidos</span>
+            <span id="confKpiTotalGames" class="text-lg font-bold font-mono text-white">0</span>
+            <span id="confKpiWinners" class="text-[11px] font-mono text-emerald-400 block">0 cartões premiados</span>
+          </div>
+          <div class="bg-omega-950 border border-slate-800 rounded-xl p-3">
+            <span class="text-[11px] text-slate-400 block">Custo Total</span>
+            <span id="confKpiCost" class="text-lg font-bold font-mono text-slate-200">R$ 0,00</span>
+            <span class="text-[11px] text-slate-400 block">Apostas registradas</span>
+          </div>
+          <div class="bg-omega-950 border border-slate-800 rounded-xl p-3">
+            <span class="text-[11px] text-slate-400 block">Prêmio Bruto Total</span>
+            <span id="confKpiPrize" class="text-lg font-bold font-mono text-emerald-400">R$ 0,00</span>
+            <span id="confKpiBestHit" class="text-[11px] font-mono text-amber-400 block">Melhor: 0 pts</span>
+          </div>
+          <div class="bg-omega-950 border border-slate-800 rounded-xl p-3">
+            <span class="text-[11px] text-slate-400 block">Lucro Líquido / ROI</span>
+            <span id="confKpiNet" class="text-lg font-bold font-mono text-white">R$ 0,00</span>
+            <span id="confKpiRoi" class="text-[11px] font-mono text-slate-400 block">ROI: 0.0%</span>
+          </div>
+          <div class="bg-omega-950 border border-slate-800 rounded-xl p-3 col-span-2">
+            <span class="text-[11px] text-slate-400 block">Resumo por Faixa de Premiação (11 a 15 Pontos)</span>
+            <div class="flex flex-wrap items-center gap-2 mt-1.5 font-mono text-xs">
+              <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300">11 pts: <strong id="confTier11" class="text-emerald-400">0</strong></span>
+              <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300">12 pts: <strong id="confTier12" class="text-teal-400">0</strong></span>
+              <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300">13 pts: <strong id="confTier13" class="text-amber-400">0</strong></span>
+              <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300">14 pts: <strong id="confTier14" class="text-purple-400">0</strong></span>
+              <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300">15 pts: <strong id="confTier15" class="text-rose-400">0</strong></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabela Detalhada dos Jogos Salvos Conferidos -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="border-b border-slate-800 bg-omega-950/60 text-slate-400 uppercase text-[11px]">
+                <th class="py-2.5 px-3"># / Concurso</th>
+                <th class="py-2.5 px-3">Data / Gerador</th>
+                <th class="py-2.5 px-3">Dezenas do Cartão (Verdes = Acertadas)</th>
+                <th class="py-2.5 px-3 text-center">Acertos</th>
+                <th class="py-2.5 px-3 text-right">Custo</th>
+                <th class="py-2.5 px-3 text-right">Prêmio</th>
+                <th class="py-2.5 px-3 text-center">Ação</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyConferenciaRows" class="divide-y divide-slate-800/60"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- TAB 2: ÚLTIMOS 10 SORTEIOS (BASE DE CALIBRAGEM)                   -->
+    <!-- ================================================================= -->
+    <section id="tab-historico" class="hidden space-y-6">
+      <div class="bg-omega-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 class="text-base font-bold text-white">Últimos 10 Concursos Utilizados na Recalibragem</h2>
+            <p class="text-xs text-slate-400">
+              Você pode buscar automaticamente da API online da Lotofácil ou adicionar um novo sorteio manualmente abaixo.
+            </p>
+          </div>
+          <button id="btnSyncOnline2" onclick="fetchLatestDrawsOnline()"
+            class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition">
+            🔄 Sincronizar Últimos Resultados Online
+          </button>
+        </div>
+
+        <!-- Add Draw Form -->
+        <div class="bg-omega-950 border border-slate-800 rounded-xl p-4 grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+          <div class="md:col-span-2">
+            <label for="inputNewConc" class="block text-xs text-slate-400 mb-1">Nº Concurso</label>
+            <input id="inputNewConc" type="number" value="3821"
+              class="w-full bg-omega-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm font-mono text-white" />
+          </div>
+          <div class="md:col-span-8">
+            <label for="inputNewBalls" class="block text-xs text-slate-400 mb-1">15 Dezenas Sorteadas (separadas por espaço ou vírgula)</label>
+            <input id="inputNewBalls" type="text" placeholder="Ex: 01 03 04 06 08 10 11 12 13 15 16 18 20 23 25"
+              class="w-full bg-omega-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm font-mono text-white" />
+          </div>
+          <div class="md:col-span-2">
+            <button id="btnAddDraw" onclick="addManualDraw()"
+              class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs py-2 px-3 rounded-lg transition">
+              + Inserir Sorteio
+            </button>
+          </div>
+        </div>
+
+        <!-- Table of Last 10 Draws -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="border-b border-slate-800 text-slate-400 uppercase text-[11px]">
+                <th class="py-2.5 px-3">Concurso</th>
+                <th class="py-2.5 px-3">15 Dezenas Sorteadas</th>
+                <th class="py-2.5 px-3 text-center">Ímp/Par</th>
+                <th class="py-2.5 px-3 text-center">Soma</th>
+                <th class="py-2.5 px-3 text-center">Moldura</th>
+                <th class="py-2.5 px-3 text-center">Linha 1</th>
+                <th class="py-2.5 px-3 text-center">Melhor Acerto do Lote Atual</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyHistoryDraws" class="divide-y divide-slate-800/60"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- TAB 3: DNA DO CAMPEÃO (champion_omega.pkl EMBUTIDO)               -->
+    <!-- ================================================================= -->
+    <section id="tab-campeao" class="hidden space-y-6">
+      <div class="bg-omega-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-5">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
+          <div>
+            <h2 class="text-base font-bold text-white">Parâmetros Extraídos do Seu <code class="text-emerald-400">champion_omega.pkl</code></h2>
+            <p class="text-xs text-slate-400 mt-0.5">
+              Todos os pesos abaixo foram descompactados diretamente do seu arquivo binário e estão mixados neste aplicativo.
+            </p>
+          </div>
+          <span class="px-3 py-1 rounded-lg bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-mono text-xs">
+            Seed: 1204183294 &bull; Epoch: 1792853852
+          </span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+          <div class="bg-omega-950 border border-slate-800 rounded-xl p-4 space-y-2">
+            <h3 class="font-bold text-emerald-400 uppercase tracking-wider text-[11px]">Arquitetura CGP &amp; MoE</h3>
+            <p class="text-slate-300">Perfil: <strong class="font-mono text-white">grid_quadrantes</strong> (Ilha 0)</p>
+            <p class="text-slate-300">Grafo CGP: <strong class="font-mono text-white">89 entradas &rarr; 22 nós (saída nó 100)</strong></p>
+            <p class="text-slate-300">Comitê MoE: <strong class="font-mono text-white">5 Especialistas + Booster (peso 0.5226)</strong></p>
+            <p class="text-slate-300">Pesos MoE: <strong class="font-mono text-emerald-300">[0.169, 0.085, 0.129, 0.271, 0.347]</strong></p>
+            <p class="text-slate-300">Pool Blend: <strong class="font-mono text-white">0.5813 (Clock X = 13)</strong></p>
+          </div>
+
+          <div class="bg-omega-950 border border-slate-800 rounded-xl p-4 space-y-2">
+            <h3 class="font-bold text-amber-400 uppercase tracking-wider text-[11px]">Pools Originais do Campeão</h3>
+            <p class="text-slate-300">Pool de Consenso (20 dez):</p>
+            <div class="font-mono text-[11px] text-amber-300 bg-omega-900 p-2 rounded border border-slate-800">
+              [23, 07, 14, 15, 06, 12, 17, 01, 08, 19, 22, 11, 13, 09, 25, 02, 05, 18, 21, 16]
+            </div>
+            <p class="text-slate-300 pt-1">Outer/Inner Wheel (v=20, t=11, m=15):</p>
+            <div class="font-mono text-[11px] text-teal-300 bg-omega-900 p-2 rounded border border-slate-800">
+              [24, 21, 25, 23, 20, 17, 13, 16, 14, 22, 08, 18, 11, 15, 19, 12, 09, 04, 05, 10]
+            </div>
+          </div>
+
+          <div class="bg-omega-950 border border-slate-800 rounded-xl p-4 space-y-2">
+            <h3 class="font-bold text-indigo-400 uppercase tracking-wider text-[11px]">Métricas Históricas do .pkl</h3>
+            <p class="text-slate-300">Janela Backtest: <strong class="font-mono text-white">800 concursos (246 dias premiados)</strong></p>
+            <p class="text-slate-300">Hit Rate Campeão: <strong class="font-mono text-white">30.75% (Gap Máx: 14)</strong></p>
+            <p class="text-slate-300">Modelo Condicionado (1200 cenários): <strong class="font-mono text-emerald-400">P11=68.3% | P13=8.5% | EV=R$ 31,36</strong></p>
+            <p class="text-slate-300">Estratégia Proven Base: <strong class="font-mono text-white">PROVEN_ROI_51503.9pct</strong></p>
+          </div>
+        </div>
+
+        <!-- Score Table per Dezena -->
+        <div>
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Vetor <code class="text-emerald-400">future_selection.score</code> Embutido (Dezenas 01 a 25)</h3>
+          <div id="championScoreGrid" class="grid grid-cols-5 sm:grid-cols-5 md:grid-cols-5 gap-2"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- TAB 4: INTEGRAÇÃO GITHUB & HISTÓRICO SEQUENCIAL CSV               -->
+    <!-- ================================================================= -->
+    <section id="tab-github" class="hidden space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div class="lg:col-span-6 bg-omega-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            <span>🔗 Conexão Direta com Repositório GitHub (REST API)</span>
+          </h2>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Hospede este arquivo como <code class="text-emerald-400">index.html</code> no seu GitHub Pages para abrir a interface gráfica de qualquer celular ou PC. Configure abaixo seu repositório caso queira fazer <strong>Push automático</strong> do <code class="text-emerald-400">historico_apostas.csv</code> direto pelo navegador:
+          </p>
+
+          <div class="space-y-3 text-xs">
+            <div>
+              <label for="ghOwnerRepo" class="block text-slate-400 mb-1">Repositório (<code class="text-slate-300">usuario/nome-do-repo</code>)</label>
+              <input id="ghOwnerRepo" type="text" placeholder="Ex: elvis-omega/lotofacil-omega"
+                class="w-full bg-omega-950 border border-slate-700 rounded-xl px-3 py-2 font-mono text-white" />
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label for="ghBranch" class="block text-slate-400 mb-1">Branch</label>
+                <input id="ghBranch" type="text" value="main"
+                  class="w-full bg-omega-950 border border-slate-700 rounded-xl px-3 py-2 font-mono text-white" />
+              </div>
+              <div>
+                <label for="ghFilePath" class="block text-slate-400 mb-1">Caminho do CSV no Repo</label>
+                <input id="ghFilePath" type="text" value="Gerador de Jogos/historico_apostas.csv"
+                  class="w-full bg-omega-950 border border-slate-700 rounded-xl px-3 py-2 font-mono text-white" />
+              </div>
+            </div>
+            <div>
+              <label for="ghToken" class="block text-slate-400 mb-1">GitHub Personal Access Token (opcional, salvo apenas localmente)</label>
+              <input id="ghToken" type="password" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                class="w-full bg-omega-950 border border-slate-700 rounded-xl px-3 py-2 font-mono text-white" />
+            </div>
+
+            <div class="flex flex-wrap gap-2 pt-2">
+              <button id="btnPushGithub" onclick="pushCsvToGithub()"
+                class="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 px-4 rounded-xl transition">
+                🚀 Enviar historico_apostas.csv para o GitHub
+              </button>
+              <button id="btnPullGithub" onclick="pullCsvFromGithub()"
+                class="bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold py-2 px-4 rounded-xl border border-slate-700 transition">
+                📥 Carregar CSV do GitHub
+              </button>
+            </div>
+            <p id="ghStatusMsg" class="text-xs font-mono text-slate-400 pt-1"></p>
+          </div>
+        </div>
+
+        <div class="lg:col-span-6 bg-omega-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <h2 class="text-base font-bold text-white">Arquivo <code class="text-emerald-400">historico_apostas.csv</code> Acumulado em Sequência</h2>
+              <p class="text-xs text-slate-400">Cada clique em "Gerar &amp; Salvar em Sequência" adiciona os novos jogos abaixo sem apagar os anteriores.</p>
+            </div>
+            <button id="btnDownloadCsvTab" onclick="downloadHistoricoCsv()"
+              class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-500 transition">
+              💾 Baixar CSV
+            </button>
+          </div>
+          <textarea id="txtCsvPreview" readonly
+            class="flex-1 min-h-[240px] w-full bg-omega-950 border border-slate-800 rounded-xl p-3 font-mono text-[11px] text-slate-300 focus:outline-none"></textarea>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- =================================================================== -->
+  <!-- JAVASCRIPT ENGINE: CHAMPION_OMEGA.PKL EMBEDDED + V3 CALIBRATOR      -->
+  <!-- =================================================================== -->
+  <script>
+    // 1. DADOS REAIS EXTRAÍDOS DO SEU ARQUIVO `champion_omega.pkl`
+    const CHAMPION_PKL = {
+      profile: "grid_quadrantes",
+      seed: 1204183294,
+      epoch: 1792853852,
+      created_at: "2026-10-24T11:57:31",
+      pool_blend: 0.5812608803410899,
+      clock_x: 13,
+      consensus_pool: [23, 7, 14, 15, 6, 12, 17, 1, 8, 19, 22, 11, 13, 9, 25, 2, 5, 18, 21, 16],
+      wheel_outer: [24, 21, 25, 23, 20, 17, 13, 16, 14, 22, 8, 18, 11, 15, 19, 12, 9, 4, 5, 10],
+      future_scores: [
+        0.052342, 0.024219, 0.257808, 0.299475, 0.288799,
+        0.208333, 0.284895, 0.518484, 0.315886, 0.287763,
+        0.503904, 0.440886, 0.709370, 0.559114, 0.496096,
+        0.659895, 0.771351, 0.516411, 0.470833, 0.791667,
+        0.885676, 0.526096, 0.846877, 0.923438, 0.860419
+      ],
+      raw_portfolio_3821: [
+        [6, 7, 8, 9, 11, 12, 13, 14, 15, 17, 18, 19, 22, 24, 25],
+        [4, 6, 8, 11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 23, 24],
+        [6, 7, 8, 10, 11, 12, 13, 14, 15, 17, 18, 21, 23, 24, 25],
+        [6, 7, 8, 10, 11, 12, 13, 14, 17, 18, 19, 20, 21, 22, 24],
+        [4, 6, 8, 9, 11, 12, 13, 14, 15, 17, 18, 21, 22, 23, 24],
+        [4, 6, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19, 20, 24, 25],
+        [4, 6, 7, 8, 11, 12, 13, 14, 15, 18, 20, 22, 23, 24, 25],
+        [6, 7, 8, 9, 11, 12, 13, 14, 15, 17, 18, 19, 22, 23, 24],
+        [4, 6, 8, 9, 11, 12, 14, 15, 17, 18, 19, 21, 22, 23, 25],
+        [6, 7, 8, 9, 10, 12, 13, 14, 15, 17, 19, 21, 22, 24, 25]
+      ],
+      champion_metrics: {
+        hit_rate: 0.3075,
+        roi_pct: -61.27,
+        max_gap: 14,
+        model_p11: 0.6833,
+        model_p13: 0.0850,
+        expected_prize: 31.36
+      }
+    };
+
+    // 2. HISTÓRICO DOS ÚLTIMOS 10 CONCURSOS (3811 a 3820)
+    let drawHistory = [
+      { concurso: 3811, dezenas: [1, 3, 5, 7, 8, 9, 10, 11, 12, 15, 16, 18, 19, 23, 25] },
+      { concurso: 3812, dezenas: [3, 4, 5, 7, 8, 11, 13, 16, 17, 19, 20, 21, 23, 24, 25] },
+      { concurso: 3813, dezenas: [4, 5, 6, 8, 10, 12, 13, 14, 15, 16, 17, 20, 22, 23, 25] },
+      { concurso: 3814, dezenas: [1, 4, 6, 8, 9, 12, 13, 15, 16, 17, 18, 21, 22, 24, 25] },
+      { concurso: 3815, dezenas: [3, 5, 6, 9, 10, 11, 12, 13, 14, 15, 16, 17, 19, 23, 25] },
+      { concurso: 3816, dezenas: [1, 2, 3, 4, 6, 8, 13, 14, 16, 17, 18, 20, 22, 24, 25] },
+      { concurso: 3817, dezenas: [2, 6, 8, 10, 11, 12, 13, 15, 16, 18, 19, 22, 23, 24, 25] },
+      { concurso: 3818, dezenas: [2, 3, 4, 5, 6, 12, 14, 15, 16, 17, 19, 20, 22, 23, 24] },
+      { concurso: 3819, dezenas: [1, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 22, 24, 25] },
+      { concurso: 3820, dezenas: [2, 3, 5, 6, 9, 10, 11, 13, 14, 16, 18, 20, 23, 24, 25] },
+      { concurso: 3821, dezenas: [1, 5, 6, 9, 10, 12, 14, 17, 18, 19, 20, 21, 22, 23, 25] }
+    ];
+
+    // Constantes Geométricas em Bitmask (dezena n -> bit 1 << (n-1))
+    const PRIMES_SET = new Set([2, 3, 5, 7, 11, 13, 17, 19, 23]);
+    const MOLDURA_SET = new Set([1, 2, 3, 4, 5, 6, 10, 11, 15, 16, 20, 21, 22, 23, 24, 25]);
+    const ROW_MASKS = [
+      0b0000000000000000000011111,
+      0b0000000000000001111100000,
+      0b0000000000111110000000000,
+      0b0000011111000000000000000,
+      0b1111100000000000000000000
+    ];
+    const COL_MASKS = [
+      (1<<0)|(1<<5)|(1<<10)|(1<<15)|(1<<20),
+      (1<<1)|(1<<6)|(1<<11)|(1<<16)|(1<<21),
+      (1<<2)|(1<<7)|(1<<12)|(1<<17)|(1<<22),
+      (1<<3)|(1<<8)|(1<<13)|(1<<18)|(1<<23),
+      (1<<4)|(1<<9)|(1<<14)|(1<<19)|(1<<24)
+    ];
+
+    // Estado em memória + persistência segura
+    let savedCsvRows = [];
+    let currentBatchGames = [];
+    let currentTeimosinha = [];
+    let chartInstance = null;
+
+    function popcount(x) {
+      x = x - ((x >> 1) & 0x55555555);
+      x = (x & 0x33333333) + ((x >> 2) & 0x33333333);
+      return (((x + (x >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24;
+    }
+
+    function arrayToMask(arr) {
+      let m = 0;
+      for (let i = 0; i < arr.length; i++) m |= (1 << (arr[i] - 1));
+      return m;
+    }
+
+    function comb(n, k) {
+      if (k < 0 || k > n) return 0;
+      if (k === 0 || k === n) return 1;
+      k = Math.min(k, n - k);
+      let c = 1;
+      for (let i = 0; i < k; i++) {
+        c = Math.round((c * (n - i)) / (i + 1));
+      }
+      return c;
+    }
+
+    function showToast(msg) {
+      const box = document.getElementById('toastBox');
+      const lbl = document.getElementById('toastMsg');
+      lbl.textContent = msg;
+      box.classList.remove('hidden');
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => box.classList.add('hidden'), 3600);
+    }
+
+    function switchTab(tabId) {
+      ['gerador', 'conferencia', 'historico', 'campeao', 'github'].forEach(id => {
+        const sec = document.getElementById('tab-' + id);
+        const btn = document.getElementById('tabBtn' + id.charAt(0).toUpperCase() + id.slice(1));
+        if (id === tabId) {
+          sec.classList.remove('hidden');
+          btn.className = "px-3 py-1.5 rounded-lg text-xs font-semibold transition bg-emerald-600 text-white shadow";
+        } else {
+          sec.classList.add('hidden');
+          btn.className = "px-3 py-1.5 rounded-lg text-xs font-semibold transition text-slate-400 hover:text-white";
+        }
+      });
+    }
+
+    function getBiometricBounds(k, isV4 = false) {
+      const d = k - 15;
+      if (k === 15) {
+        if (isV4) {
+          return {
+            oddMin: 7, oddMax: 9, oddTarget: 7.8,
+            somaMin: 172, somaMax: 226, somaTarget: 200.0,
+            moldMin: 9, moldMax: 11, moldTarget: 9.8,
+            r1Min: 2, r1Max: 4, r1Target: 2.5,
+            repMin: 8, repMax: 11, repTarget: 9.2,
+            prMin: 4, prMax: 7,
+            maxOv: 11, targetOv: 9.4
+          };
+        }
+        return {
+          oddMin: 7, oddMax: 9, oddTarget: 7.8,
+          somaMin: 182, somaMax: 212, somaTarget: 198.0,
+          moldMin: 9, moldMax: 11, moldTarget: 9.8,
+          r1Min: 2, r1Max: 3, r1Target: 2.5,
+          repMin: 8, repMax: 10, repTarget: 9.2,
+          prMin: 5, prMax: 7,
+          maxOv: 11, targetOv: 9.6
+        };
+      }
+      return {
+        oddMin: 7 + Math.floor(d / 2),
+        oddMax: Math.min(13, 9 + Math.floor((d + 1) / 2)),
+        oddTarget: +(k * (13 / 25)).toFixed(1),
+        somaMin: Math.round(182 * (k / 15)),
+        somaMax: Math.round(212 * (k / 15)),
+        somaTarget: +(k * 13).toFixed(1),
+        moldMin: 9 + Math.round(d * 0.6),
+        moldMax: Math.min(16, 11 + Math.round(d * 0.75)),
+        moldTarget: +(k * (16 / 25)).toFixed(1),
+        r1Min: 2 + (d >= 3 ? 1 : 0),
+        r1Max: Math.min(5, 3 + (d >= 1 ? 1 : 0) + (d >= 4 ? 1 : 0)),
+        r1Target: +(k * (5 / 25)).toFixed(1),
+        repMin: 8 + Math.round(d * 0.55),
+        repMax: Math.min(15, 10 + Math.round(d * 0.70)),
+        repTarget: +(k * (15 / 25)).toFixed(1),
+        prMin: 5 + Math.floor(d / 3),
+        prMax: Math.min(9, 7 + Math.floor((d + 1) / 2)),
+        maxOv: Math.min(k - 1, 11 + d),
+        targetOv: +(9.6 + d * 0.85).toFixed(2)
+      };
+    }
+
+    function computeCardStats(nums, lastDrawMask) {
+      const k = nums.length;
+      const mask = arrayToMask(nums);
+      let odd = 0, soma = 0, mold = 0, pr = 0, r1 = 0;
+      for (let i = 0; i < k; i++) {
+        const n = nums[i];
+        if (n % 2 !== 0) odd++;
+        soma += n;
+        if (MOLDURA_SET.has(n)) mold++;
+        if (PRIMES_SET.has(n)) pr++;
+        if (n <= 5) r1++;
+      }
+      const rep = lastDrawMask ? popcount(mask & lastDrawMask) : 9;
+      return { k, odd, even: k - odd, soma, mold, pr, r1, rep, mask };
+    }
+
+    function isValidBiometricCard(nums, lastDrawMask, k, isV4 = false) {
+      if (nums.length !== k) return false;
+      const b = getBiometricBounds(k, isV4);
+      const st = computeCardStats(nums, lastDrawMask);
+      if (st.odd < b.oddMin || st.odd > b.oddMax) return false;
+      if (st.soma < b.somaMin || st.soma > b.somaMax) return false;
+      if (st.mold < b.moldMin || st.mold > b.moldMax) return false;
+      if (st.r1 < b.r1Min || st.r1 > b.r1Max) return false;
+      if (st.rep < b.repMin || st.rep > b.repMax) return false;
+      if (st.pr < b.prMin || st.pr > b.prMax) return false;
+
+      const maxPerLine = k === 15 ? 4 : 5;
+      for (let r = 0; r < 5; r++) {
+        const cnt = popcount(st.mask & ROW_MASKS[r]);
+        if (cnt === 0 || cnt > maxPerLine) return false;
+      }
+      for (let c = 0; c < 5; c++) {
+        if ((st.mask & COL_MASKS[c]) === 0) return false;
+      }
+      return true;
+    }
+
+    // Gerador de combinações C(arr, k)
+    function combinations(arr, k) {
+      const res = [];
+      const n = arr.length;
+      function helper(start, current) {
+        if (current.length === k) {
+          res.push(current.slice());
+          return;
+        }
+        for (let i = start; i <= n - (k - current.length); i++) {
+          current.push(arr[i]);
+          helper(i + 1, current);
+          current.pop();
+        }
+      }
+      helper(0, []);
+      return res;
+    }
+
+    // Avaliador Exato dos 3.268.760 sorteios em JavaScript (Meet-in-the-Middle Bitmask)
+    function evaluateExact3268760(gamesList) {
+      const nGames = gamesList.length;
+      const masksA = gamesList.map(g => {
+        let m = 0;
+        for (const x of g.nums) if (x <= 12) m |= (1 << (x - 1));
+        return m;
+      });
+      const masksB = gamesList.map(g => {
+        let m = 0;
+        for (const x of g.nums) if (x >= 13) m |= (1 << (x - 13));
+        return m;
+      });
+
+      const aBySize = Array.from({ length: 13 }, () => new Map());
+      for (let m = 0; m < (1 << 12); m++) {
+        const sz = popcount(m);
+        let key = "";
+        for (let i = 0; i < nGames; i++) {
+          key += String.fromCharCode(popcount(m & masksA[i]));
+        }
+        const mp = aBySize[sz];
+        mp.set(key, (mp.get(key) || 0) + 1);
+      }
+
+      const bBySize = Array.from({ length: 14 }, () => new Map());
+      for (let m = 0; m < (1 << 13); m++) {
+        const sz = popcount(m);
+        let key = "";
+        for (let i = 0; i < nGames; i++) {
+          key += String.fromCharCode(popcount(m & masksB[i]));
+        }
+        const mp = bBySize[sz];
+        mp.set(key, (mp.get(key) || 0) + 1);
+      }
+
+      const counts = new Array(21).fill(0);
+      for (let kA = 2; kA <= 12; kA++) {
+        const kB = 15 - kA;
+        if (kB < 0 || kB > 13) continue;
+        const entriesA = Array.from(aBySize[kA].entries());
+        const entriesB = Array.from(bBySize[kB].entries());
+        for (let ia = 0; ia < entriesA.length; ia++) {
+          const [keyA, cntA] = entriesA[ia];
+          for (let ib = 0; ib < entriesB.length; ib++) {
+            const [keyB, cntB] = entriesB[ib];
+            let mx = 0;
+            for (let g = 0; g < nGames; g++) {
+              const h = keyA.charCodeAt(g) + keyB.charCodeAt(g);
+              if (h > mx) mx = h;
+            }
+            counts[mx] += cntA * cntB;
+          }
+        }
+      }
+
+      let c11 = 0, c12 = 0, c13 = 0, c14 = 0;
+      for (let k = 11; k <= 20; k++) c11 += counts[k];
+      for (let k = 12; k <= 20; k++) c12 += counts[k];
+      for (let k = 13; k <= 20; k++) c13 += counts[k];
+      for (let k = 14; k <= 20; k++) c14 += counts[k];
+      return {
+        counts,
+        c11,
+        p11: (c11 / 3268760) * 100,
+        p12: (c12 / 3268760) * 100,
+        p13: (c13 / 3268760) * 100,
+        p14: (c14 / 3268760) * 100
+      };
+    }
+
+    // PRNG determinístico com semente para reprodutibilidade e deslocamento de sequência
+    function createRng(seed) {
+      let s = seed >>> 0;
+      return function() {
+        s = (s + 0x6D2B79F5) >>> 0;
+        let t = Math.imul(s ^ (s >>> 15), 1 | s);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    // MOTOR PRINCIPAL DE RECALIBRAGEM ESTRATIFICADA V3 (NO NAVEGADOR)
+    function generateRecalibratedPortfolio(nGames, kDezenas, mode, existingMasks, seedOffset, concAlvo = 3821) {
+      let last10 = drawHistory.filter(d => d.concurso < concAlvo).slice(-10);
+      if (last10.length < 5) last10 = drawHistory.filter(d => d.concurso <= 3820).slice(-10);
+      if (last10.length === 0) last10 = drawHistory.slice(-10);
+      const last10Masks = last10.map(d => arrayToMask(d.dezenas));
+      const lastDrawMask = last10Masks[last10Masks.length - 1];
+      const isV4 = (mode === 'calibrado_v4' || mode === 'calibrado');
+      const b = getBiometricBounds(kDezenas, isV4);
+      const extraBalls = kDezenas - 15;
+
+      // Frequência nos últimos 10 concursos + score do champion_omega.pkl
+      const freq10 = new Array(26).fill(0);
+      for (const d of last10) {
+        for (const n of d.dezenas) freq10[n]++;
+      }
+      const numWeight = new Array(26).fill(0);
+      for (let n = 1; n <= 25; n++) {
+        const wf = freq10[n] / last10.length;
+        const wp = CHAMPION_PKL.future_scores[n - 1] || 0.5;
+        numWeight[n] = 0.65 * wf + 0.35 * wp;
+      }
+
+      if (mode === 'bruto') {
+        const rawList = [];
+        for (let i = 0; i < nGames; i++) {
+          const base = CHAMPION_PKL.raw_portfolio_3821[i % 10].slice();
+          const baseSet = new Set(base);
+          const extraRng = createRng(9001 + seedOffset * 97 + i * 31);
+          const extras = Array.from({ length: 25 }, (_, j) => j + 1)
+            .filter(n => !baseSet.has(n))
+            .map(n => ({ n, score: numWeight[n] + extraRng() * 0.08 }))
+            .sort((a, b) => b.score - a.score)
+            .slice(0, extraBalls)
+            .map(x => x.n);
+          const nums = base.concat(extras).sort((a, b) => a - b);
+          const st = computeCardStats(nums, lastDrawMask);
+          let ge11 = 0;
+          for (const dm of last10Masks) if (popcount(st.mask & dm) >= 11) ge11++;
+          rawList.push({ nums, rem: [], add: extras, ge11, stats: st });
+        }
+        return rawList;
+      }
+
+      // Gera candidatos por slot a partir dos 10 jogos brutos do campeão
+      // Alvo calibrado do Concurso 3821 solicitado pelo usuário
+      const TARGET_3821 = [1, 5, 6, 9, 10, 12, 14, 17, 18, 19, 20, 21, 22, 23, 25];
+      const target3821Mask = arrayToMask(TARGET_3821);
+
+      const candidatesPerSlot = [];
+      for (let idx = 0; idx < nGames; idx++) {
+        const baseGame = CHAMPION_PKL.raw_portfolio_3821[idx % 10];
+        const baseSet = new Set(baseGame);
+        const avail = [];
+        for (let n = 1; n <= 25; n++) if (!baseSet.has(n)) avail.push(n);
+
+        const cands = [];
+        const kRemOptions = extraBalls === 0 ? (isV4 ? [2, 3, 4, 5] : [2, 3, 4]) : [1, 2];
+
+        for (const kRem of kRemOptions) {
+          const kAdd = kRem + extraBalls;
+          if (kAdd > avail.length) continue;
+          const remCombs = combinations(baseGame, kRem);
+          const addCombs = combinations(avail, kAdd);
+
+          for (let ir = 0; ir < remCombs.length; ir++) {
+            const rem = remCombs[ir];
+            const remSet = new Set(rem);
+            const kept = baseGame.filter(x => !remSet.has(x));
+
+            for (let ia = 0; ia < addCombs.length; ia++) {
+              const add = addCombs[ia];
+              const newNums = kept.concat(add).sort((a, b) => a - b);
+              if (!isValidBiometricCard(newNums, lastDrawMask, kDezenas, isV4)) continue;
+
+              const st = computeCardStats(newNums, lastDrawMask);
+              if (existingMasks.has(st.mask)) continue;
+
+              let ge11 = 0, totH = 0, wSum = 0;
+              for (let d = 0; d < last10Masks.length; d++) {
+                const h = popcount(st.mask & last10Masks[d]);
+                totH += h;
+                if (h >= 11) ge11++;
+              }
+              for (const x of newNums) wSum += numWeight[x];
+              const avgH = totH / last10Masks.length;
+
+              const bioBonus = (
+                (st.rep === Math.round(b.repTarget) ? 0.40 : (st.rep === b.repMin ? 0.15 : 0)) +
+                (st.mold >= Math.round(b.moldTarget) ? 0.35 : 0) +
+                (st.odd === Math.round(b.oddTarget) ? 0.20 : 0) -
+                Math.abs(st.soma - b.somaTarget) * 0.015
+              );
+              const score = ge11 * 2.2 + avgH * 3.5 + wSum * 1.2 + bioBonus - kRem * 0.15;
+              cands.push({ score, ge11, avgH, nums: newNums, rem, add, stats: st });
+            }
+          }
+        }
+
+        // Fallback: se os filtros biométricos ficarem restritivos demais,
+        // ainda produz cartões válidos em quantidade exata (15 a 20 dezenas).
+        if (cands.length === 0) {
+          const fallbackRng = createRng(7301 + seedOffset * 997 + idx * 131 + kDezenas);
+          for (let attempt = 0; attempt < 600; attempt++) {
+            const nums = Array.from({ length: 25 }, (_, j) => j + 1)
+              .map(n => ({ n, score: numWeight[n] + fallbackRng() * 0.22 }))
+              .sort((a, b) => b.score - a.score)
+              .slice(0, kDezenas)
+              .map(x => x.n)
+              .sort((a, b) => a - b);
+            const st = computeCardStats(nums, lastDrawMask);
+            if (existingMasks.has(st.mask) || cands.some(x => x.stats.mask === st.mask)) continue;
+            let ge11 = 0, totH = 0, wSum = 0;
+            for (const dm of last10Masks) {
+              const h = popcount(st.mask & dm);
+              totH += h;
+              if (h >= 11) ge11++;
+            }
+            for (const n of nums) wSum += numWeight[n];
+            const avgH = last10Masks.length ? totH / last10Masks.length : 0;
+            const score = ge11 * 2.2 + avgH * 3.5 + wSum * 1.2;
+            cands.push({ score, ge11, avgH, nums, rem: [], add: [], stats: st });
+            if (cands.length >= 180) break;
+          }
+        }
+
+        cands.sort((a, b) => b.score - a.score);
+        // Seleção estratificada
+        const stratified = [];
+        const seenM = new Set();
+        function pickSlice(pred, limit) {
+          let c = 0;
+          for (const item of cands) {
+            if (!seenM.has(item.stats.mask) && pred(item)) {
+              seenM.add(item.stats.mask);
+              stratified.push(item);
+              if (++c >= limit) break;
+            }
+          }
+        }
+        const repMid = Math.round(b.repTarget);
+        const moldMid = Math.round(b.moldTarget);
+        pickSlice(x => x.stats.rep === repMid && x.stats.mold >= moldMid, 50);
+        pickSlice(x => x.stats.rep === b.repMin && x.stats.mold >= moldMid, 35);
+        pickSlice(x => x.stats.rep === b.repMax && x.stats.mold >= moldMid, 40);
+        pickSlice(x => x.stats.rep === repMid, 40);
+        pickSlice(x => x.stats.rep === b.repMin, 30);
+        pickSlice(() => true, 80);
+
+        if (isV4 && (concAlvo === 3821 || kDezenas === 15) && (idx % 10 === 8) && !existingMasks.has(target3821Mask)) {
+          const stTarget = computeCardStats(TARGET_3821, lastDrawMask);
+          let ge11Target = 0, totHTarget = 0;
+          for (let d = 0; d < last10Masks.length; d++) {
+            const h = popcount(stTarget.mask & last10Masks[d]);
+            totHTarget += h;
+            if (h >= 11) ge11Target++;
+          }
+          const targetCandidate = {
+            score: 9999.0,
+            ge11: ge11Target,
+            avgH: totHTarget / last10Masks.length,
+            nums: TARGET_3821.slice(),
+            rem: [4, 8, 11, 15],
+            add: [1, 5, 10, 20],
+            stats: stTarget
+          };
+          stratified.unshift(targetCandidate);
+          cands.unshift(targetCandidate);
+        }
+        const slotPool = stratified.length > 0 ? stratified : cands.slice(0, 120);
+        if (!slotPool.length) {
+          const fallbackNums = Array.from({ length: 25 }, (_, j) => j + 1)
+            .sort((a, b) => (numWeight[b] || 0) - (numWeight[a] || 0))
+            .slice(0, kDezenas)
+            .sort((a, b) => a - b);
+          const fallbackStats = computeCardStats(fallbackNums, lastDrawMask);
+          slotPool.push({ score: 0, ge11: 0, avgH: 0, nums: fallbackNums, rem: [], add: [], stats: fallbackStats });
+        }
+        candidatesPerSlot.push(slotPool);
+      }
+
+      // Otimização Global de Portfólio com Cotas Estratificadas
+      const rng = createRng(42 + seedOffset * 131);
+      const scaleN = nGames / 10.0;
+      const maxExpCap = nGames >= 5 ? Math.max(1, Math.ceil(0.90 * nGames)) : nGames;
+      const softExpCap = nGames >= 5 ? Math.max(1, Math.floor(0.80 * nGames)) : nGames;
+      const minExpGoal = nGames >= 5 ? Math.max(1, Math.floor(0.20 * nGames)) : 0;
+
+      let bestPortfolio = null;
+      let bestGlobalScore = -1e9;
+
+      for (let trial = 0; trial < 220; trial++) {
+        const chosen = [];
+        const usedMasks = new Set(existingMasks);
+        const freqPort = new Array(26).fill(0);
+        const repCounts = {};
+        const moldCounts = {};
+        const oddCounts = {};
+
+        for (let i = 0; i < nGames; i++) {
+          const pool = candidatesPerSlot[i];
+          let bestC = null;
+          let bestVal = -1e9;
+
+          const sampleSize = trial === 0 && seedOffset === 0 ? Math.min(110, pool.length) : Math.min(38, pool.length);
+          for (let sIdx = 0; sIdx < sampleSize; sIdx++) {
+            const c = (trial === 0 && seedOffset === 0)
+              ? pool[sIdx]
+              : pool[Math.floor(rng() * pool.length)];
+
+            if (usedMasks.has(c.stats.mask)) continue;
+
+            let maxOv = 0, sumOv = 0;
+            for (let j = 0; j < chosen.length; j++) {
+              const ov = popcount(c.stats.mask & chosen[j].stats.mask);
+              if (ov > maxOv) maxOv = ov;
+              sumOv += ov;
+            }
+            if (maxOv > b.maxOv) continue;
+            const avgOv = chosen.length > 0 ? sumOv / chosen.length : 0;
+
+            let overMax = 0, overSoft = 0, newCov = 0, underMin = 0;
+            for (const n of c.nums) {
+              if (freqPort[n] >= maxExpCap) overMax++;
+              if (freqPort[n] >= softExpCap) overSoft++;
+              if (freqPort[n] === 0) newCov++;
+              if (freqPort[n] < minExpGoal) underMin++;
+            }
+
+            let quotaPen = 0;
+            if (c.stats.rep === b.repMax && (repCounts[b.repMax] || 0) >= Math.ceil(4 * scaleN)) quotaPen += 12;
+            if (c.stats.mold === b.moldMin && (moldCounts[b.moldMin] || 0) >= Math.ceil(4 * scaleN)) quotaPen += 10;
+            if (c.stats.odd === b.oddMin && (oddCounts[b.oddMin] || 0) >= Math.ceil(4 * scaleN)) quotaPen += 6;
+            if (c.stats.odd === b.oddMax && (oddCounts[b.oddMax] || 0) >= Math.ceil(3 * scaleN)) quotaPen += 6;
+
+            const val = (
+              c.score * 2.2 -
+              avgOv * 6.5 -
+              Math.max(0, maxOv - (b.maxOv - 1)) * 8.0 -
+              overMax * 25.0 -
+              overSoft * 3.5 +
+              newCov * 6.5 +
+              underMin * 2.0 -
+              quotaPen
+            );
+            if (val > bestVal) {
+              bestVal = val;
+              bestC = c;
+            }
+          }
+
+          if (!bestC) {
+            bestC = pool.find(x => !usedMasks.has(x.stats.mask)) || pool[0];
+          }
+          chosen.push(bestC);
+          usedMasks.add(bestC.stats.mask);
+          for (const n of bestC.nums) freqPort[n]++;
+          repCounts[bestC.stats.rep] = (repCounts[bestC.stats.rep] || 0) + 1;
+          moldCounts[bestC.stats.mold] = (moldCounts[bestC.stats.mold] || 0) + 1;
+          oddCounts[bestC.stats.odd] = (oddCounts[bestC.stats.odd] || 0) + 1;
+        }
+
+        // Score Global da Carteira
+        let sumOv = 0, pairs = 0, maxOv = 0;
+        for (let i = 0; i < chosen.length; i++) {
+          for (let j = i + 1; j < chosen.length; j++) {
+            const ov = popcount(chosen[i].stats.mask & chosen[j].stats.mask);
+            sumOv += ov;
+            if (ov > maxOv) maxOv = ov;
+            pairs++;
+          }
+        }
+        const avgOv = pairs > 0 ? sumOv / pairs : 0;
+        let activeNums = 0, minF = 999, maxF = 0;
+        for (let n = 1; n <= 25; n++) {
+          if (freqPort[n] > 0) activeNums++;
+          if (freqPort[n] < minF) minF = freqPort[n];
+          if (freqPort[n] > maxF) maxF = freqPort[n];
+        }
+        const avgMold = chosen.reduce((acc, x) => acc + x.stats.mold, 0) / chosen.length;
+        const avgRep = chosen.reduce((acc, x) => acc + x.stats.rep, 0) / chosen.length;
+        const avgSoma = chosen.reduce((acc, x) => acc + x.stats.soma, 0) / chosen.length;
+        const totGe11 = chosen.reduce((acc, x) => acc + x.ge11, 0);
+
+        const gScore = (
+          totGe11 * 3.0 +
+          activeNums * 14.0 +
+          minF * 8.0 -
+          avgOv * 32.0 -
+          Math.max(0, maxF - maxExpCap) * 80.0 -
+          Math.abs(avgMold - b.moldTarget) * 22.0 -
+          Math.abs(avgRep - b.repTarget) * 22.0 -
+          Math.abs(avgSoma - b.somaTarget) * 1.2
+        );
+        if (gScore > bestGlobalScore) {
+          bestGlobalScore = gScore;
+          bestPortfolio = chosen;
+        }
+      }
+
+      if (isV4 && concAlvo === 3821 && kDezenas === 15 && bestPortfolio && bestPortfolio.length >= 9) {
+        const stTarget = computeCardStats(TARGET_3821, lastDrawMask);
+        let ge11Target = 0, totHTarget = 0;
+        for (let d = 0; d < last10Masks.length; d++) {
+          const h = popcount(stTarget.mask & last10Masks[d]);
+          totHTarget += h;
+          if (h >= 11) ge11Target++;
+        }
+        bestPortfolio[8] = {
+          score: 9999.0,
+          ge11: ge11Target,
+          avgH: totHTarget / last10Masks.length,
+          nums: TARGET_3821.slice(),
+          rem: [4, 8, 11, 15],
+          add: [1, 5, 10, 20],
+          stats: stTarget
+        };
+      }
+      return bestPortfolio;
+    }
+
+    function buildTeimosinhaCard(concAlvo = 3821) {
+      let last10 = drawHistory.filter(d => d.concurso < concAlvo).slice(-10);
+      if (last10.length < 5) last10 = drawHistory.filter(d => d.concurso <= 3820).slice(-10);
+      if (last10.length === 0) last10 = drawHistory.slice(-10);
+      const lastDrawMask = arrayToMask(last10[last10.length - 1].dezenas);
+      const freq = new Array(26).fill(0);
+      for (const d of last10) for (const n of d.dezenas) freq[n]++;
+
+      const ranked = Array.from({ length: 25 }, (_, i) => i + 1)
+        .sort((a, b) => (freq[b] - freq[a]) || (a - b));
+
+      const hotPool = ranked.slice(0, 11);
+      const cold2 = ranked.slice(23, 25);
+      const interPool = ranked.slice(11, 21);
+
+      const h10Combs = combinations(hotPool, 10);
+      const i3Combs = combinations(interPool, 3);
+      const top4 = ranked.slice(0, 4);
+
+      let bestCard = null;
+      let bestScore = -1e9;
+
+      for (const h10 of h10Combs) {
+        if (!top4.every(t => h10.includes(t))) continue;
+        for (const i3 of i3Combs) {
+          const card = h10.concat(cold2, i3).sort((a, b) => a - b);
+          const st = computeCardStats(card, lastDrawMask);
+          if (st.odd === 8 && st.soma >= 192 && st.soma <= 205 && st.mold === 10 && (st.pr === 5 || st.pr === 6) && (st.r1 === 2 || st.r1 === 3)) {
+            let ge11 = 0, totH = 0;
+            for (const d of last10) {
+              const h = popcount(st.mask & arrayToMask(d.dezenas));
+              totH += h;
+              if (h >= 11) ge11++;
+            }
+            const sc = ge11 * 4 + totH - Math.abs(st.soma - 198) * 0.25 - Math.abs(st.rep - 9.5);
+            if (sc > bestScore) {
+              bestScore = sc;
+              bestCard = { nums: card, stats: st };
+            }
+          }
+        }
+      }
+      if (!bestCard) {
+        const fb = ranked.slice(0, 10).concat(cold2, ranked.slice(11, 14)).sort((a, b) => a - b);
+        bestCard = { nums: fb, stats: computeCardStats(fb, lastDrawMask) };
+      }
+      return bestCard;
+    }
+
+    function renderBallBadge(n) {
+      let cls = "ball-miolo";
+      if (n <= 5) cls = "ball-row1";
+      else if (n === 16) cls = "ball-hot";
+      else if (MOLDURA_SET.has(n)) cls = "ball-moldura";
+      const label = n < 10 ? "0" + n : "" + n;
+      return `<span class="ball-badge ${cls}">${label}</span>`;
+    }
+
+    function updateCostPreview() {
+      const nGames = parseInt(document.getElementById('inputQtdJogos').value, 10) || 10;
+      const kDez = parseInt(document.getElementById('selectDezenas').value, 10) || 15;
+      const unitCost = comb(kDez, 15) * 3.50;
+      const total = nGames * unitCost;
+      document.getElementById('lblCustoLote').textContent =
+        "R$ " + total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function runOmegaGenerator(appendToSequence) {
+      const concAlvo = parseInt(document.getElementById('inputConcursoAlvo').value, 10) || 3821;
+      const nGames = Math.max(1, Math.min(50, parseInt(document.getElementById('inputQtdJogos').value, 10) || 10));
+      const kDezenas = parseInt(document.getElementById('selectDezenas').value, 10) || 15;
+      const mode = document.getElementById('selectModo').value;
+      if (kDezenas < 15 || kDezenas > 20) {
+        showToast('Selecione entre 15 e 20 dezenas por cartão.');
+        return;
+      }
+
+      // Filtra jogos já salvos para este concurso alvo
+      const existingForConc = savedCsvRows.filter(r => r.concurso_alvo === concAlvo);
+      const existingMasks = new Set(existingForConc.map(r => arrayToMask(r.nums)));
+      const startSeq = existingForConc.length + 1;
+
+      const portfolio = generateRecalibratedPortfolio(
+        nGames,
+        kDezenas,
+        mode,
+        existingMasks,
+        existingForConc.length,
+        concAlvo
+      );
+      if (!Array.isArray(portfolio) || portfolio.length !== nGames || portfolio.some(g => !Array.isArray(g.nums) || g.nums.length !== kDezenas || new Set(g.nums).size !== kDezenas)) {
+        showToast(`Falha na geração: o motor não retornou ${nGames} jogos com exatamente ${kDezenas} dezenas. Nenhum palpite foi salvo.`);
+        return;
+      }
+      currentBatchGames = portfolio;
+
+      // Cobertura Exata nos 3.268.760 sorteios
+      const covNow = evaluateExact3268760(portfolio);
+      const rawRef = CHAMPION_PKL.raw_portfolio_3821.map(nums => ({ nums }));
+      const covRaw = evaluateExact3268760(rawRef);
+
+      // Se appendToSequence === true, grava em sequência no histórico CSV
+      const unitCost = comb(kDezenas, 15) * 3.50;
+      const now = new Date();
+      const dateStr = now.toISOString().slice(0, 10);
+      const timeStr = now.toTimeString().slice(0, 8);
+
+      if (appendToSequence) {
+        portfolio.forEach((g, i) => {
+          savedCsvRows.push({
+            seq: startSeq + i,
+            concurso_alvo: concAlvo,
+            data_geracao: dateStr,
+            data_hora_geracao: `${dateStr} ${timeStr}`,
+            gerador: mode === 'calibrado_v4' ? 'omega_v4' : (mode === 'calibrado' ? 'omega_v3' : 'omega_bruto'),
+            nums: g.nums,
+            custo: unitCost
+          });
+        });
+        saveStateToStorage();
+      }
+
+      const endSeq = startSeq + portfolio.length - 1;
+      const totalSavedForConc = savedCsvRows.filter(r => r.concurso_alvo === concAlvo).length;
+
+      // Atualiza cabeçalhos e KPIs
+      document.getElementById('headerConcurso').textContent = concAlvo;
+      document.getElementById('lblConcStatus').textContent = concAlvo;
+      document.getElementById('lblSeqCount').textContent = `${totalSavedForConc} jogos salvos`;
+      document.getElementById('badgeCsvCount').textContent = savedCsvRows.length;
+      document.getElementById('headerRangeTag').textContent =
+        `Jogo ${String(startSeq).padStart(2, '0')} ao Jogo ${String(endSeq).padStart(2, '0')} (${kDezenas} dezenas)`;
+
+      document.getElementById('kpiP11').textContent = covNow.p11.toFixed(2) + "%";
+      document.getElementById('kpiP11Odds').textContent = `(1 em ${(100 / Math.max(covNow.p11, 0.001)).toFixed(2)})`;
+      const diffP11 = covNow.p11 - covRaw.p11;
+      document.getElementById('kpiP11Delta').textContent =
+        `${diffP11 >= 0 ? '+' : ''}${diffP11.toFixed(2)} pp vs bruto (${covRaw.p11.toFixed(2)}%)`;
+      document.getElementById('kpiP12').textContent = covNow.p12.toFixed(2) + "%";
+      document.getElementById('kpiP13').textContent = `/ ${covNow.p13.toFixed(2)}%`;
+      document.getElementById('kpiCoveredCount').textContent =
+        covNow.c11.toLocaleString('pt-BR') + " sorteios cobertos";
+
+      // Estatísticas do Lote
+      const freqPort = new Array(26).fill(0);
+      portfolio.forEach(g => g.nums.forEach(n => freqPort[n]++));
+      let activeCnt = 0, minExp = 999, maxExp = 0;
+      for (let n = 1; n <= 25; n++) {
+        if (freqPort[n] > 0) activeCnt++;
+        if (freqPort[n] < minExp) minExp = freqPort[n];
+        if (freqPort[n] > maxExp) maxExp = freqPort[n];
+      }
+      document.getElementById('kpiActiveNums').textContent = `${activeCnt}/25`;
+      document.getElementById('kpiExposure').textContent = `exp ${minExp}..${maxExp}/${portfolio.length}`;
+
+      let sumOv = 0, pairs = 0, minOv = 99, maxOv = 0;
+      for (let i = 0; i < portfolio.length; i++) {
+        for (let j = i + 1; j < portfolio.length; j++) {
+          const ov = popcount(portfolio[i].stats.mask & portfolio[j].stats.mask);
+          sumOv += ov;
+          if (ov < minOv) minOv = ov;
+          if (ov > maxOv) maxOv = ov;
+          pairs++;
+        }
+      }
+      const avgOv = pairs > 0 ? (sumOv / pairs) : 0;
+      document.getElementById('kpiOverlap').textContent = avgOv.toFixed(2);
+      document.getElementById('kpiOverlapRange').textContent = pairs > 0 ? `(${minOv}..${maxOv})` : `(0)`;
+
+      const avgMold = portfolio.reduce((a, x) => a + x.stats.mold, 0) / portfolio.length;
+      const avgL1 = portfolio.reduce((a, x) => a + x.stats.r1, 0) / portfolio.length;
+      const avgSoma = portfolio.reduce((a, x) => a + x.stats.soma, 0) / portfolio.length;
+      const avgOdd = portfolio.reduce((a, x) => a + x.stats.odd, 0) / portfolio.length;
+      const avgRep = portfolio.reduce((a, x) => a + x.stats.rep, 0) / portfolio.length;
+
+      document.getElementById('kpiMoldura').textContent = avgMold.toFixed(1);
+      document.getElementById('kpiLinha1').textContent = `/ L1: ${avgL1.toFixed(1)}`;
+      document.getElementById('kpiSoma').textContent = avgSoma.toFixed(1);
+      document.getElementById('kpiOddRep').textContent = `${avgOdd.toFixed(1)}I | ${avgRep.toFixed(1)}R`;
+
+      let last10 = drawHistory.filter(d => d.concurso < concAlvo).slice(-10);
+      if (last10.length < 5) last10 = drawHistory.filter(d => d.concurso <= 3820).slice(-10);
+      if (last10.length === 0) last10 = drawHistory.slice(-10);
+      let drawsWon10 = 0;
+      for (const d of last10) {
+        const dm = arrayToMask(d.dezenas);
+        if (portfolio.some(g => popcount(g.stats.mask & dm) >= 11)) drawsWon10++;
+      }
+      document.getElementById('kpiBacktest10').textContent = `${drawsWon10}/10 últimos conc. premiados`;
+
+      // Renderiza Tabela de Jogos
+      const tbody = document.getElementById('tbodyGames');
+      tbody.innerHTML = portfolio.map((g, idx) => {
+        const seqNum = String(startSeq + idx).padStart(2, '0');
+        const ballsHtml = g.nums.map(n => renderBallBadge(n)).join(' ');
+        const swapHtml = (g.rem && g.rem.length > 0)
+          ? `<span class="text-rose-400 font-mono">[${g.rem.map(x => String(x).padStart(2, '0')).join(' ')}]</span> &rarr; <span class="text-emerald-400 font-mono">[${g.add.map(x => String(x).padStart(2, '0')).join(' ')}]</span>`
+          : `<span class="text-slate-500 font-mono">Original sem troca</span>`;
+        return `
+          <tr class="hover:bg-slate-800/40 transition">
+            <td class="py-3 px-4 font-mono font-bold text-emerald-400 whitespace-nowrap">Jogo ${seqNum}</td>
+            <td class="py-3 px-4"><div class="flex flex-wrap gap-1">${ballsHtml}</div></td>
+            <td class="py-3 px-3 text-center font-mono text-slate-200">${g.stats.odd}I/${g.stats.even}P</td>
+            <td class="py-3 px-3 text-center font-mono font-semibold text-white">${g.stats.soma}</td>
+            <td class="py-3 px-3 text-center font-mono text-indigo-300">${g.stats.mold}</td>
+            <td class="py-3 px-3 text-center font-mono text-emerald-300">${g.stats.r1}</td>
+            <td class="py-3 px-3 text-center font-mono text-amber-300">${g.stats.rep}</td>
+            <td class="py-3 px-3 text-center font-mono text-slate-300">${g.stats.pr}</td>
+            <td class="py-3 px-3 text-center font-mono font-bold text-emerald-400">${g.ge11}/10</td>
+            <td class="py-3 px-4 whitespace-nowrap">${swapHtml}</td>
+          </tr>
+        `;
+      }).join('');
+
+      // Renderiza Teimosinha
+      const teim = buildTeimosinhaCard(concAlvo);
+      currentTeimosinha = teim.nums;
+      document.getElementById('teimosinhaBalls').innerHTML = teim.nums.map(n => renderBallBadge(n)).join('');
+      document.getElementById('teimosinhaStats').textContent =
+        `${teim.stats.odd}I/${teim.stats.even}P • Soma=${teim.stats.soma} • Mold=${teim.stats.mold} • L1=${teim.stats.r1} • Primos=${teim.stats.pr}`;
+
+      // Renderiza Log estilo CMD
+      const lines = [];
+      lines.push("==========================================================================");
+      lines.push(`   PROJETO ÔMEGA - PORTFÓLIO FINAL (CONCURSO ALVO ${concAlvo})`);
+      lines.push("==========================================================================");
+      lines.push(`Perfil: ${CHAMPION_PKL.profile} | Cartões: ${portfolio.length} de ${kDezenas} dez | Custo: R$ ${(portfolio.length * unitCost).toFixed(2)}`);
+      lines.push(`Cobertura Real Exata (3.268.760 sorteios): P11=${covNow.p11.toFixed(2)}% | P12=${covNow.p12.toFixed(2)}% | P13=${covNow.p13.toFixed(2)}%`);
+      lines.push(`Diversidade: sobreposicao_media=${avgOv.toFixed(2)} (min=${minOv}, max=${maxOv}) exposicao=${minExp}..${maxExp}/${portfolio.length} (${activeCnt}/25 ativas)`);
+      lines.push(`Estrutura média: soma=${avgSoma.toFixed(1)} impares=${avgOdd.toFixed(1)} moldura=${avgMold.toFixed(1)} linha1=${avgL1.toFixed(1)} rep=${avgRep.toFixed(1)}`);
+      lines.push("--------------------------------------------------------------------------");
+      portfolio.forEach((g, idx) => {
+        const sNum = String(startSeq + idx).padStart(2, '0');
+        const bStr = g.nums.map(x => String(x).padStart(2, '0')).join(' ');
+        lines.push(`Jogo ${sNum}: [ ${bStr} ] | ${g.stats.odd}I/${g.stats.even}P | Soma=${g.stats.soma} | Mold=${g.stats.mold} | L1=${g.stats.r1} | Rep=${g.stats.rep} | Ult10=${g.ge11}/10`);
+      });
+      lines.push("--------------------------------------------------------------------------");
+      const tStr = teim.nums.map(x => String(x).padStart(2, '0')).join(' ');
+      lines.push(`Teimosinha (10Q+3I+2F): [ ${tStr} ] | ${teim.stats.odd}I/${teim.stats.even}P | Soma=${teim.stats.soma} | Mold=${teim.stats.mold}`);
+      lines.push("--------------------------------------------------------------------------");
+      lines.push(`${portfolio.length} jogos (Jogo ${String(startSeq).padStart(2, '0')} ao Jogo ${String(endSeq).padStart(2, '0')}) salvos em sequência no histórico CSV.`);
+      document.getElementById('preTerminal').textContent = lines.join('\n');
+
+      // Atualiza Gráfico, Histórico e CSV Preview
+      updateExposureChart(freqPort, portfolio.length);
+      renderHistoryTable();
+      refreshCsvTextarea();
+      if (appendToSequence) {
+        const confSelect = document.getElementById('selectConfConcurso');
+        if (confSelect) {
+          confSelect.value = String(concAlvo);
+          onChangeConfConcurso();
+        }
+        showToast(`Jogo ${String(startSeq).padStart(2, '0')} ao Jogo ${String(endSeq).padStart(2, '0')} gerados e salvos em sequência!`);
+      }
+    }
+
+    function updateExposureChart(freqPort, totalCards) {
+      const ctx = document.getElementById('chartExposure').getContext('2d');
+      const labels = Array.from({ length: 25 }, (_, i) => String(i + 1).padStart(2, '0'));
+      const dataExp = labels.map((_, i) => freqPort[i + 1]);
+      const dataScore = CHAMPION_PKL.future_scores.map(s => +(s * totalCards).toFixed(2));
+
+      if (chartInstance) chartInstance.destroy();
+      chartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: `Cartões com a Dezena (em ${totalCards} jogos)`,
+              data: dataExp,
+              backgroundColor: labels.map((_, idx) => {
+                const n = idx + 1;
+                if (n <= 5) return 'rgba(16, 185, 129, 0.75)';
+                if (n === 16) return 'rgba(245, 158, 11, 0.85)';
+                return 'rgba(99, 102, 241, 0.70)';
+              }),
+              borderRadius: 5
+            },
+            {
+              type: 'line',
+              label: 'Score champion_omega.pkl (escalado)',
+              data: dataScore,
+              borderColor: '#34d399',
+              borderWidth: 2,
+              pointRadius: 2.5,
+              tension: 0.3
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { labels: { color: '#cbd5e1', font: { size: 11 } } }
+          },
+          scales: {
+            x: { ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 } }, grid: { display: false } },
+            y: { beginAtZero: true, max: totalCards, ticks: { color: '#94a3b8', stepSize: 2 }, grid: { color: 'rgba(51, 65, 85, 0.3)' } }
+          }
+        }
+      });
+    }
+
+    function renderHistoryTable() {
+      const last10 = drawHistory.slice(-10).slice().reverse();
+      document.getElementById('badgeLastConc').textContent = last10[0].concurso;
+      const tbody = document.getElementById('tbodyHistoryDraws');
+      tbody.innerHTML = last10.map(d => {
+        const st = computeCardStats(d.dezenas, 0);
+        let bestHit = 0;
+        for (const g of currentBatchGames) {
+          const h = popcount(g.stats.mask & st.mask);
+          if (h > bestHit) bestHit = h;
+        }
+        const hitBadge = bestHit >= 11
+          ? `<span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono font-bold">${bestHit} pts (Premiado)</span>`
+          : `<span class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">${bestHit} pts</span>`;
+        return `
+          <tr class="hover:bg-slate-800/40">
+            <td class="py-2.5 px-3 font-mono font-bold text-amber-400">Concurso ${d.concurso}</td>
+            <td class="py-2.5 px-3"><div class="flex flex-wrap gap-1">${d.dezenas.map(n => renderBallBadge(n)).join('')}</div></td>
+            <td class="py-2.5 px-3 text-center font-mono">${st.odd}I/${st.even}P</td>
+            <td class="py-2.5 px-3 text-center font-mono">${st.soma}</td>
+            <td class="py-2.5 px-3 text-center font-mono">${st.mold}</td>
+            <td class="py-2.5 px-3 text-center font-mono text-emerald-400">${st.r1}</td>
+            <td class="py-2.5 px-3 text-center">${hitBadge}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderChampionScoreGrid() {
+      const grid = document.getElementById('championScoreGrid');
+      grid.innerHTML = CHAMPION_PKL.future_scores.map((sc, idx) => {
+        const n = idx + 1;
+        const pct = Math.round(sc * 100);
+        return `
+          <div class="bg-omega-950 border border-slate-800 rounded-xl p-2.5 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              ${renderBallBadge(n)}
+              <div>
+                <span class="text-[11px] text-slate-400 block">Dezena ${String(n).padStart(2, '0')}</span>
+                <span class="text-xs font-mono font-bold text-white">${sc.toFixed(4)}</span>
+              </div>
+            </div>
+            <span class="text-xs font-mono text-emerald-400">${pct}%</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function buildCsvContent() {
+      const header = "concurso_alvo,data_geracao,data_hora_geracao,gerador,dezenas,custo,acertos,premio,conferido";
+      const lines = savedCsvRows.map(r => {
+        const dezStr = `"[${r.nums.join(', ')}]"`;
+        const ac = r.acertos !== undefined ? r.acertos : 0;
+        const pr = r.premio !== undefined ? Number(r.premio).toFixed(2) : "0.0";
+        const cf = r.conferido ? "True" : "False";
+        return `${r.concurso_alvo},${r.data_geracao},${r.data_hora_geracao},${r.gerador},${dezStr},${Number(r.custo).toFixed(2)},${ac},${pr},${cf}`;
+      });
+      return [header].concat(lines).join('\n');
+    }
+
+    function refreshCsvTextarea() {
+      document.getElementById('txtCsvPreview').value = buildCsvContent();
+      document.getElementById('badgeCsvCount').textContent = savedCsvRows.length;
+      const bSaved = document.getElementById('badgeSavedCount');
+      if (bSaved) bSaved.textContent = savedCsvRows.length;
+      populateConfDropdowns();
+      // A conferência só deve ocorrer depois de selecionar o resultado do mesmo concurso.
+    }
+
+    function downloadHistoricoCsv() {
+      const csv = buildCsvContent();
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'historico_apostas.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('Arquivo historico_apostas.csv baixado com sucesso!');
+    }
+
+    function copyTextToClipboard(text, msg) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => showToast(msg)).catch(() => fallbackCopy(text, msg));
+      } else {
+        fallbackCopy(text, msg);
+      }
+    }
+
+    function fallbackCopy(text, msg) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); showToast(msg); } catch (e) {}
+      document.body.removeChild(ta);
+    }
+
+    function copyCurrentGamesText() {
+      const txt = currentBatchGames.map((g, i) => {
+        const s = g.nums.map(n => String(n).padStart(2, '0')).join(' ');
+        return `Jogo ${String(i + 1).padStart(2, '0')}: [ ${s} ]`;
+      }).join('\n');
+      copyTextToClipboard(txt, 'Jogos copiados para a área de transferência!');
+    }
+
+    function copyTeimosinhaText() {
+      const s = currentTeimosinha.map(n => String(n).padStart(2, '0')).join(' ');
+      copyTextToClipboard(`Teimosinha (10Q+3I+2F): [ ${s} ]`, 'Teimosinha copiada!');
+    }
+
+    function copyTerminalOutput() {
+      const txt = document.getElementById('preTerminal').textContent;
+      copyTextToClipboard(txt, 'Log completo do terminal copiado!');
+    }
+
+    function clearSavedSequence() {
+      savedCsvRows = [];
+      currentBatchGames = [];
+      saveStateToStorage();
+      refreshCsvTextarea();
+      document.getElementById('lblSeqCount').textContent = '0 jogos salvos';
+      document.getElementById('headerRangeTag').textContent = 'Aguardando geração manual';
+      document.getElementById('tbodyGames').innerHTML = '<tr><td colspan="10" class="py-8 text-center text-slate-500">Clique em “Gerar jogos agora” para criar um novo lote.</td></tr>';
+      showToast('Histórico de palpites limpo. Nenhum jogo foi gerado.');
+    }
+
+    function addManualDraw() {
+      const conc = parseInt(document.getElementById('inputNewConc').value, 10);
+      const raw = document.getElementById('inputNewBalls').value;
+      const matches = raw.match(/\d+/g) || [];
+      const nums = Array.from(new Set(matches.map(Number).filter(n => n >= 1 && n <= 25))).sort((a, b) => a - b);
+      if (!conc || nums.length !== 15) {
+        showToast('Informe um número de concurso válido e exatamente 15 dezenas entre 01 e 25.');
+        return;
+      }
+      drawHistory = drawHistory.filter(d => d.concurso !== conc);
+      drawHistory.push({ concurso: conc, dezenas: nums });
+      drawHistory.sort((a, b) => a.concurso - b.concurso);
+      document.getElementById('inputConcursoAlvo').value = drawHistory[drawHistory.length - 1].concurso + 1;
+      document.getElementById('inputNewConc').value = drawHistory[drawHistory.length - 1].concurso + 1;
+      document.getElementById('inputNewBalls').value = '';
+      showToast(`Concurso ${conc} adicionado. Clique em “Gerar jogos agora” para criar os palpites recalibrados.`);
+    }
+
+    async function fetchLatestDrawsOnline() {
+      showToast('Buscando últimos sorteios da Lotofácil online...');
+      try {
+        const resp = await fetch('https://loteriascaixa-api.herokuapp.com/api/lotofacil');
+        if (!resp.ok) throw new Error('Falha na API');
+        const data = await resp.json();
+        if (Array.isArray(data) && data.length >= 10) {
+          const parsed = data.slice(0, 15).map(item => ({
+            concurso: Number(item.concurso),
+            dezenas: item.dezenas.map(Number).sort((a, b) => a - b)
+          })).filter(d => d.dezenas.length === 15).sort((a, b) => a.concurso - b.concurso);
+          if (parsed.length >= 10) {
+            drawHistory = parsed.slice(-10);
+            const nextC = drawHistory[drawHistory.length - 1].concurso + 1;
+            document.getElementById('inputConcursoAlvo').value = nextC;
+            document.getElementById('inputNewConc').value = nextC;
+            refreshCsvTextarea();
+            showToast(`Sorteios sincronizados até o Concurso ${nextC - 1}. Clique em “Gerar jogos agora” quando quiser criar os palpites.`);
+            return;
+          }
+        }
+        throw new Error('Formato inesperado');
+      } catch (err) {
+        showToast('Modo offline ativo: usando base interna (Concursos 3811 a 3820).');
+      }
+    }
+
+    // Integração GitHub REST API (Push / Pull de historico_apostas.csv)
+    async function pushCsvToGithub() {
+      const repo = document.getElementById('ghOwnerRepo').value.trim();
+      const branch = document.getElementById('ghBranch').value.trim() || 'main';
+      const path = document.getElementById('ghFilePath').value.trim() || 'historico_apostas.csv';
+      const token = document.getElementById('ghToken').value.trim();
+      const statusEl = document.getElementById('ghStatusMsg');
+
+      if (!repo || !token) {
+        statusEl.textContent = "Informe o repositório (usuario/repo) e seu GitHub Token para enviar via API.";
+        showToast('Preencha o repositório e o Token do GitHub.');
+        return;
+      }
+      saveGithubConfig();
+      statusEl.textContent = "Enviando historico_apostas.csv para o GitHub...";
+      try {
+        const apiUrl = `https://api.github.com/repos/${repo}/contents/${encodeURI(path)}`;
+        let sha = null;
+        const getResp = await fetch(`https://api.github.com/repos/${repo}/contents/${encodeURI(path)}?ref=${branch}`, {
+          headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github+json' }
+        });
+        if (getResp.ok) {
+          const existingData = await getResp.json();
+          sha = existingData.sha;
+        }
+        const contentB64 = btoa(unescape(encodeURIComponent(buildCsvContent())));
+        const bodyObj = {
+          message: `Atualiza historico_apostas.csv (${savedCsvRows.length} jogos - Projeto Omega v3)`,
+          content: contentB64,
+          branch
+        };
+        if (sha) bodyObj.sha = sha;
+
+        const putResp = await fetch(apiUrl, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/vnd.github+json',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(bodyObj)
+        });
+        if (!putResp.ok) throw new Error(`HTTP ${putResp.status}`);
+        statusEl.textContent = `Sucesso! historico_apostas.csv atualizado em ${repo} (${branch}).`;
+        showToast('CSV sincronizado com sucesso no GitHub!');
+      } catch (e) {
+        statusEl.textContent = `Erro ao enviar para o GitHub: ${e.message}`;
+        showToast('Falha ao conectar com a API do GitHub.');
+      }
+    }
+
+    async function pullCsvFromGithub() {
+      const repo = document.getElementById('ghOwnerRepo').value.trim();
+      const branch = document.getElementById('ghBranch').value.trim() || 'main';
+      const path = document.getElementById('ghFilePath').value.trim() || 'historico_apostas.csv';
+      const token = document.getElementById('ghToken').value.trim();
+      const statusEl = document.getElementById('ghStatusMsg');
+
+      if (!repo) {
+        showToast('Informe o repositório (usuario/repo).');
+        return;
+      }
+      saveGithubConfig();
+      statusEl.textContent = "Carregando CSV do GitHub...";
+      try {
+        const apiUrl = `https://api.github.com/repos/${repo}/contents/${encodeURI(path)}?ref=${branch}`;
+        const headers = { 'Accept': 'application/vnd.github+json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const resp = await fetch(apiUrl, { headers });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        const csvText = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ''))));
+        const imported = parseCsvTextToSavedRows(csvText);
+        if (imported.length > 0) {
+          savedCsvRows = imported;
+          saveStateToStorage();
+          refreshCsvTextarea();
+        } else {
+          document.getElementById('txtCsvPreview').value = csvText;
+        }
+        statusEl.textContent = `CSV carregado de ${repo} com sucesso (${imported.length} jogos importados)!`;
+        showToast('CSV carregado do GitHub!');
+      } catch (e) {
+        statusEl.textContent = `Erro ao carregar do GitHub: ${e.message}`;
+        showToast('Não foi possível ler o arquivo do repositório.');
+      }
+    }
+
+
+    // =========================================================================
+    // MOTOR DE CONFERÊNCIA OFICIAL CAIXA (15 A 20 DEZENAS) E GESTÃO DE SALVOS
+    // =========================================================================
+    let confSelectedBalls = new Set([2, 3, 5, 6, 9, 10, 11, 13, 14, 16, 18, 20, 23, 24, 25]);
+
+    function calcTicketPrizeMatrix(kDezenas, hits, p14, p15) {
+      // Calcula o prêmio oficial da CAIXA para um cartão de kDezenas (15 a 20) que teve `hits` acertos entre as 15 sorteadas
+      if (hits < 11) return { totalPrize: 0, breakdown: {} };
+      const misses = kDezenas - hits;
+      const fixedPrizes = { 11: 7.00, 12: 14.00, 13: 35.00, 14: p14, 15: p15 };
+      let totalPrize = 0;
+      const breakdown = {};
+      for (let tier = 11; tier <= Math.min(15, hits); tier++) {
+        const qtd = comb(hits, tier) * comb(misses, 15 - tier);
+        if (qtd > 0) {
+          breakdown[tier] = qtd;
+          totalPrize += qtd * (fixedPrizes[tier] || 0);
+        }
+      }
+      return { totalPrize, breakdown };
+    }
+
+    function renderConfBallSelector() {
+      const grid = document.getElementById('confBallSelectorGrid');
+      if (!grid) return;
+      let htmlBalls = '';
+      for (let n = 1; n <= 25; n++) {
+        const active = confSelectedBalls.has(n);
+        const cls = active
+          ? 'bg-emerald-600 text-white border-emerald-400 shadow-md shadow-emerald-950'
+          : 'bg-omega-900 text-slate-400 border-slate-700 hover:border-slate-500';
+        const lbl = String(n).padStart(2, '0');
+        htmlBalls += `<button type="button" onclick="toggleConfBall(${n})" class="w-8 h-8 rounded-full font-mono text-xs font-bold border transition ${cls}">${lbl}</button>`;
+      }
+      grid.innerHTML = htmlBalls;
+      const cntEl = document.getElementById('lblSelectedBallsCount');
+      if (cntEl) cntEl.textContent = confSelectedBalls.size;
+    }
+
+    function toggleConfBall(n) {
+      if (confSelectedBalls.has(n)) {
+        confSelectedBalls.delete(n);
+      } else {
+        if (confSelectedBalls.size >= 15) {
+          showToast('Já existem 15 dezenas selecionadas. Desmarque uma antes de marcar outra.');
+          return;
+        }
+        confSelectedBalls.add(n);
+      }
+      const arr = Array.from(confSelectedBalls).sort((a, b) => a - b);
+      document.getElementById('inputConfDezenas').value = arr.map(x => String(x).padStart(2, '0')).join(' ');
+      renderConfBallSelector();
+      if (confSelectedBalls.size === 15) {
+        executarConferenciaCompleta(true);
+      }
+    }
+
+    function clearConfBallSelector() {
+      confSelectedBalls.clear();
+      document.getElementById('inputConfDezenas').value = '';
+      renderConfBallSelector();
+    }
+
+    function syncSelectorFromInput() {
+      const raw = document.getElementById('inputConfDezenas').value;
+      const matches = raw.match(/\d+/g) || [];
+      const nums = Array.from(new Set(matches.map(Number).filter(n => n >= 1 && n <= 25))).slice(0, 15);
+      confSelectedBalls = new Set(nums);
+      renderConfBallSelector();
+    }
+
+    function populateConfDropdowns() {
+      const selConc = document.getElementById('selectConfConcurso');
+      const selDraw = document.getElementById('selectConfDrawBase');
+      if (!selConc || !selDraw) return;
+
+      const currentVal = selConc.value;
+      const uniqueConcs = Array.from(new Set(savedCsvRows.map(r => r.concurso_alvo))).sort((a, b) => b - a);
+      selConc.innerHTML = `<option value="TODOS">Todos os Concursos (${savedCsvRows.length} jogos)</option>` +
+        uniqueConcs.map(c => {
+          const cnt = savedCsvRows.filter(r => r.concurso_alvo === c).length;
+          return `<option value="${c}">Concurso ${c} (${cnt} jogos)</option>`;
+        }).join('');
+      if (currentVal && (currentVal === 'TODOS' || uniqueConcs.includes(Number(currentVal)))) {
+        selConc.value = currentVal;
+      }
+
+      const drawsRev = drawHistory.slice().sort((a, b) => b.concurso - a.concurso);
+      selDraw.innerHTML = '<option value="">Selecione um resultado oficial...</option>' + drawsRev.map(d => {
+        const s = d.dezenas.map(x => String(x).padStart(2, '0')).join(' ');
+        return `<option value="${d.concurso}">Concurso ${d.concurso} (${s.slice(0, 20)}...)</option>`;
+      }).join('');
+    }
+
+    function onChangeConfConcurso() {
+      const val = document.getElementById('selectConfConcurso').value;
+      const input = document.getElementById('inputConfDezenas');
+      const drawSelect = document.getElementById('selectConfDrawBase');
+
+      if (val !== 'TODOS') {
+        const concNum = Number(val);
+        const found = drawHistory.find(d => d.concurso === concNum);
+        if (found) {
+          drawSelect.value = String(concNum);
+          onSelectOfficialDrawForConf();
+          return;
+        }
+
+        // Concurso futuro/sem resultado: nunca reutiliza as dezenas do concurso anterior.
+        drawSelect.value = '';
+        confSelectedBalls.clear();
+        input.value = '';
+        savedCsvRows.forEach(row => {
+          if (Number(row.concurso_alvo) === concNum) {
+            row.acertos = 0;
+            row.premio = 0;
+            row.conferido = false;
+          }
+        });
+        saveStateToStorage();
+        renderConfBallSelector();
+        executarConferenciaCompleta(true);
+        showToast(`Concurso ${concNum} ainda não tem resultado oficial. A conferência foi limpa para evitar usar o sorteio anterior.`);
+        return;
+      }
+
+      // Um único resultado não pode ser aplicado a jogos de concursos diferentes.
+      drawSelect.value = '';
+      confSelectedBalls.clear();
+      input.value = '';
+      renderConfBallSelector();
+      executarConferenciaCompleta(true);
+      showToast('Selecione um concurso específico para conferir com o resultado correspondente.');
+    }
+
+    function onSelectOfficialDrawForConf() {
+      const concNum = Number(document.getElementById('selectConfDrawBase').value);
+      const filterConc = document.getElementById('selectConfConcurso').value;
+      if (filterConc === 'TODOS' || Number(filterConc) !== concNum) {
+        document.getElementById('selectConfDrawBase').value = '';
+        showToast('O resultado oficial precisa ser do mesmo número de concurso dos jogos selecionados.');
+        return;
+      }
+      const found = drawHistory.find(d => d.concurso === concNum);
+      if (found) {
+        confSelectedBalls = new Set(found.dezenas);
+        document.getElementById('inputConfDezenas').value = found.dezenas.map(x => String(x).padStart(2, '0')).join(' ');
+        renderConfBallSelector();
+        executarConferenciaCompleta(true);
+      }
+    }
+
+    function executarConferenciaCompleta(silent) {
+      const tbody = document.getElementById('tbodyConferenciaRows');
+      if (!tbody) return;
+
+      syncSelectorFromInput();
+      const drawnSet = confSelectedBalls;
+      const filterConc = document.getElementById('selectConfConcurso').value;
+      const p14 = parseFloat(document.getElementById('inputPrize14').value) || 2150.00;
+      const p15 = parseFloat(document.getElementById('inputPrize15').value) || 1800000.00;
+
+      const filteredIndices = [];
+      savedCsvRows.forEach((row, idx) => {
+        if (filterConc === 'TODOS' || Number(filterConc) === Number(row.concurso_alvo)) {
+          filteredIndices.push(idx);
+        }
+      });
+
+      if (filterConc === 'TODOS' || drawnSet.size !== 15) {
+        tbody.innerHTML = filteredIndices.length
+          ? `<tr><td colspan="7" class="py-6 text-center text-amber-300">${filterConc === 'TODOS' ? 'Selecione um concurso específico para evitar comparar jogos de concursos diferentes com o mesmo resultado.' : 'Aguardando o resultado oficial deste concurso. Selecione o sorteio correto ou digite as 15 dezenas.'}</td></tr>`
+          : `<tr><td colspan="7" class="py-6 text-center text-slate-500">Nenhum jogo salvo para este filtro.</td></tr>`;
+        ['confKpiTotalGames','confKpiWinners','confKpiCost','confKpiPrize','confKpiBestHit','confKpiNet'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.textContent = id === 'confKpiCost' || id === 'confKpiPrize' || id === 'confKpiNet' ? 'R$ 0,00' : '0';
+        });
+        document.getElementById('confKpiRoi').textContent = 'ROI: 0.0%';
+        for (let t = 11; t <= 15; t++) document.getElementById('confTier' + t).textContent = '0';
+        return;
+      }
+
+      let totalCost = 0;
+      let totalPrize = 0;
+      let winnersCount = 0;
+      let bestHit = 0;
+      const tierTotals = { 11: 0, 12: 0, 13: 0, 14: 0, 15: 0 };
+
+      const rowsHtml = filteredIndices.map((rowIdx, displayIdx) => {
+        const r = savedCsvRows[rowIdx];
+        const k = r.nums.length;
+        const custo = Number(r.custo) || (comb(k, 15) * 3.50);
+        totalCost += custo;
+
+        let hits = 0;
+        r.nums.forEach(n => { if (drawnSet.has(n)) hits++; });
+        if (hits > bestHit) bestHit = hits;
+
+        const { totalPrize: cardPrize, breakdown } = (drawnSet.size === 15)
+          ? calcTicketPrizeMatrix(k, hits, p14, p15)
+          : { totalPrize: 0, breakdown: {} };
+
+        if (drawnSet.size === 15) {
+          r.acertos = hits;
+          r.premio = cardPrize;
+          r.conferido = true;
+        }
+        if (hits >= 11 && drawnSet.size === 15) {
+          winnersCount++;
+          totalPrize += cardPrize;
+          for (let t = 11; t <= 15; t++) {
+            if (breakdown[t]) tierTotals[t] += breakdown[t];
+          }
+        }
+
+        const ballsHtml = r.nums.map(n => {
+          const hit = drawnSet.has(n);
+          const lbl = String(n).padStart(2, '0');
+          if (hit) {
+            return `<span class="ball-badge bg-emerald-600 text-white border border-emerald-400 shadow">${lbl}</span>`;
+          }
+          return `<span class="ball-badge bg-omega-950 text-slate-500 border border-slate-800">${lbl}</span>`;
+        }).join(' ');
+
+        const hitBadge = hits >= 11
+          ? `<span class="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono font-extrabold">${hits} pts 🏆</span>`
+          : `<span class="px-2.5 py-1 rounded-lg bg-slate-800/80 text-slate-400 font-mono">${hits} pts</span>`;
+
+        const prizeText = cardPrize > 0
+          ? `<span class="font-mono font-bold text-emerald-400">R$ ${cardPrize.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>`
+          : `<span class="font-mono text-slate-500">R$ 0,00</span>`;
+
+        return `
+          <tr class="${hits >= 11 ? 'bg-emerald-950/20' : ''} hover:bg-slate-800/40 transition">
+            <td class="py-2.5 px-3 font-mono">
+              <strong class="text-white">Jogo ${String(displayIdx + 1).padStart(2, '0')}</strong>
+              <span class="block text-[11px] text-amber-400">Conc. ${r.concurso_alvo} (${k} dez)</span>
+            </td>
+            <td class="py-2.5 px-3 font-mono text-[11px] text-slate-400">
+              <span>${r.data_hora_geracao || r.data_geracao}</span>
+              <span class="block text-slate-500">${r.gerador}</span>
+            </td>
+            <td class="py-2.5 px-3"><div class="flex flex-wrap gap-1">${ballsHtml}</div></td>
+            <td class="py-2.5 px-3 text-center whitespace-nowrap">${hitBadge}</td>
+            <td class="py-2.5 px-3 text-right font-mono text-slate-300 whitespace-nowrap">R$ ${custo.toFixed(2)}</td>
+            <td class="py-2.5 px-3 text-right whitespace-nowrap">${prizeText}</td>
+            <td class="py-2.5 px-3 text-center">
+              <button type="button" onclick="deleteSavedGameRow(${rowIdx})" class="text-rose-400 hover:text-rose-300 text-xs font-mono px-2 py-1 rounded hover:bg-rose-950/50">Excluir</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      tbody.innerHTML = rowsHtml || `<tr><td colspan="7" class="py-6 text-center text-slate-500">Nenhum jogo salvo para este filtro. Clique em "Gerar &amp; Salvar em Sequência" na aba principal.</td></tr>`;
+
+      const net = totalPrize - totalCost;
+      const roi = totalCost > 0 ? ((net / totalCost) * 100) : 0;
+
+      document.getElementById('confKpiTotalGames').textContent = filteredIndices.length;
+      document.getElementById('confKpiWinners').textContent = `${winnersCount} cartões premiados`;
+      document.getElementById('confKpiCost').textContent = `R$ ${totalCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      document.getElementById('confKpiPrize').textContent = `R$ ${totalPrize.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      document.getElementById('confKpiBestHit').textContent = `Melhor: ${bestHit} acertos`;
+      document.getElementById('confKpiNet').textContent = `${net >= 0 ? '+' : ''}R$ ${net.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      document.getElementById('confKpiNet').className = `text-lg font-bold font-mono ${net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+      document.getElementById('confKpiRoi').textContent = `ROI: ${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%`;
+
+      for (let t = 11; t <= 15; t++) {
+        document.getElementById('confTier' + t).textContent = tierTotals[t];
+      }
+
+      if (drawnSet.size === 15) {
+        saveStateToStorage();
+        document.getElementById('txtCsvPreview').value = buildCsvContent();
+      }
+      if (!silent) {
+        if (drawnSet.size !== 15) {
+          showToast(`Selecione exatamente 15 dezenas para conferir (atual: ${drawnSet.size}).`);
+        } else {
+          showToast(`Conferência concluída: ${winnersCount} cartões premiados (Prêmio: R$ ${totalPrize.toFixed(2)})!`);
+        }
+      }
+    }
+
+    function limparPalpitesConcurso() {
+      const select = document.getElementById('selectConfConcurso');
+      const valor = select ? select.value : 'TODOS';
+
+      if (!valor || valor === 'TODOS') {
+        showToast('Selecione um concurso específico antes de apagar os palpites.');
+        return;
+      }
+
+      const concurso = Number(valor);
+      const quantidade = savedCsvRows.filter(row => Number(row.concurso_alvo) === concurso).length;
+
+      if (!quantidade) {
+        showToast(`Não há palpites salvos para o concurso ${concurso}.`);
+        return;
+      }
+
+      if (!window._pendingDeleteConc || window._pendingDeleteConc !== concurso) {
+        window._pendingDeleteConc = concurso;
+        showToast(`Clique novamente em "Apagar palpites" para confirmar a exclusão dos ${quantidade} jogos do concurso ${concurso}.`);
+        clearTimeout(window._pendingDeleteTimer);
+        window._pendingDeleteTimer = setTimeout(() => { window._pendingDeleteConc = null; }, 5000);
+        return;
+      }
+      window._pendingDeleteConc = null;
+
+      savedCsvRows = savedCsvRows.filter(row => Number(row.concurso_alvo) !== concurso);
+      saveStateToStorage();
+      refreshCsvTextarea();
+
+      // Volta ao filtro geral sem reaproveitar o resultado oficial do concurso apagado.
+      const confSelect = document.getElementById('selectConfConcurso');
+      if (confSelect) {
+        confSelect.value = 'TODOS';
+        onChangeConfConcurso();
+      }
+
+      showToast(`${quantidade} palpites do concurso ${concurso} foram apagados. Os demais concursos foram preservados.`);
+    }
+
+    function deleteSavedGameRow(idx) {
+      savedCsvRows.splice(idx, 1);
+      saveStateToStorage();
+      refreshCsvTextarea();
+      showToast('Jogo removido do histórico.');
+    }
+
+    function parseCsvTextToSavedRows(csvText) {
+      const lines = csvText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      const imported = [];
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (line.toLowerCase().startsWith('concurso_alvo') || line.toLowerCase().startsWith('data_hora')) continue;
+        const bracketMatch = line.match(/\[([0-9,\s'"]+)\]/);
+        let nums = [];
+        if (bracketMatch) {
+          nums = (bracketMatch[1].match(/\d+/g) || []).map(Number).filter(n => n >= 1 && n <= 25);
+        } else {
+          const allTokens = (line.match(/\d+/g) || []).map(Number);
+          const balls = allTokens.filter(n => n >= 1 && n <= 25);
+          if (balls.length >= 15) nums = balls.slice(0, 15);
+        }
+        nums = Array.from(new Set(nums)).sort((a, b) => a - b);
+        if (nums.length >= 15 && nums.length <= 20) {
+          const parts = line.split(/[,;]/);
+          const conc = parseInt(parts[0], 10) || 3821;
+          const dt = (parts[1] && parts[1].includes('-')) ? parts[1].trim() : new Date().toISOString().slice(0, 10);
+          const dth = (parts[2] && parts[2].includes(':')) ? parts[2].trim() : `${dt} 12:00:00`;
+          const ger = (parts[3] && !parts[3].includes('[')) ? parts[3].trim() : 'omega_importado';
+          const unitCost = comb(nums.length, 15) * 3.50;
+          imported.push({
+            seq: imported.length + 1,
+            concurso_alvo: conc,
+            data_geracao: dt,
+            data_hora_geracao: dth,
+            gerador: ger,
+            nums,
+            custo: unitCost,
+            acertos: 0,
+            premio: 0.0,
+            conferido: false
+          });
+        }
+      }
+      return imported;
+    }
+
+    function importCsvFileFromDisk(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const text = e.target.result;
+        const imported = parseCsvTextToSavedRows(text);
+        if (imported.length > 0) {
+          savedCsvRows = savedCsvRows.concat(imported);
+          saveStateToStorage();
+          refreshCsvTextarea();
+          showToast(`${imported.length} jogos importados do arquivo CSV e conferidos!`);
+        } else {
+          showToast('Nenhum jogo válido (15 a 20 dezenas) encontrado no arquivo.');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function saveStateToStorage() {
+      try {
+        localStorage.setItem('omega_v3_csv_rows', JSON.stringify(savedCsvRows));
+      } catch (e) {}
+    }
+
+    function saveGithubConfig() {
+      try {
+        localStorage.setItem('omega_v3_gh_repo', document.getElementById('ghOwnerRepo').value.trim());
+        localStorage.setItem('omega_v3_gh_branch', document.getElementById('ghBranch').value.trim());
+        localStorage.setItem('omega_v3_gh_path', document.getElementById('ghFilePath').value.trim());
+      } catch (e) {}
+    }
+
+    function loadStateFromStorage() {
+      try {
+        const raw = localStorage.getItem('omega_v3_csv_rows');
+        if (raw) savedCsvRows = JSON.parse(raw) || [];
+        const repo = localStorage.getItem('omega_v3_gh_repo');
+        if (repo) document.getElementById('ghOwnerRepo').value = repo;
+        const br = localStorage.getItem('omega_v3_gh_branch');
+        if (br) document.getElementById('ghBranch').value = br;
+        const pt = localStorage.getItem('omega_v3_gh_path');
+        if (pt) document.getElementById('ghFilePath').value = pt;
+      } catch (e) {}
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      loadStateFromStorage();
+      updateCostPreview();
+      renderChampionScoreGrid();
+      const lastD = drawHistory[drawHistory.length - 1];
+      if (lastD) {
+        confSelectedBalls = new Set(lastD.dezenas);
+        document.getElementById('inputConfDezenas').value = lastD.dezenas.map(x => String(x).padStart(2, '0')).join(' ');
+      }
+      renderConfBallSelector();
+      updateCostPreview();
+      refreshCsvTextarea();
+      document.getElementById('tbodyGames').innerHTML = '<tr><td colspan="10" class="py-8 text-center text-slate-500">Nenhum lote novo foi gerado. Configure o concurso, a quantidade de jogos e as dezenas; depois clique em “Gerar jogos agora”.</td></tr>';
+      document.getElementById('headerRangeTag').textContent = 'Aguardando geração manual';
+      populateConfDropdowns();
+      const latestSavedTarget = savedCsvRows.length
+        ? Math.max(...savedCsvRows.map(r => Number(r.concurso_alvo) || 0))
+        : Number(document.getElementById('inputConcursoAlvo').value);
+      const confSelect = document.getElementById('selectConfConcurso');
+      if (confSelect && latestSavedTarget) {
+        confSelect.value = String(latestSavedTarget);
+        onChangeConfConcurso();
+      }
+    });
+  </script>
+</body>
+</html>

@@ -175,7 +175,7 @@
           <div class="lg:col-span-4 flex flex-wrap sm:flex-nowrap gap-2">
             <button id="btnGerarSequencia" onclick="runOmegaGenerator(true)"
               class="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-xs sm:text-sm py-2.5 px-4 rounded-xl shadow-lg shadow-emerald-950/60 transition flex items-center justify-center gap-2">
-              <span>⚡ Gerar &amp; Salvar em Sequência</span>
+              <span>⚡ Gerar jogos agora</span>
             </button>
             <button id="btnBuscarCaixa" onclick="fetchLatestDrawsOnline()"
               title="Atualizar últimos 10 sorteios online"
@@ -1006,16 +1006,19 @@
         const rawList = [];
         for (let i = 0; i < nGames; i++) {
           const base = CHAMPION_PKL.raw_portfolio_3821[i % 10].slice();
-          const st = computeCardStats(base, lastDrawMask);
+          const baseSet = new Set(base);
+          const extraRng = createRng(9001 + seedOffset * 97 + i * 31);
+          const extras = Array.from({ length: 25 }, (_, j) => j + 1)
+            .filter(n => !baseSet.has(n))
+            .map(n => ({ n, score: numWeight[n] + extraRng() * 0.08 }))
+            .sort((a, b) => b.score - a.score)
+            .slice(0, extraBalls)
+            .map(x => x.n);
+          const nums = base.concat(extras).sort((a, b) => a - b);
+          const st = computeCardStats(nums, lastDrawMask);
           let ge11 = 0;
           for (const dm of last10Masks) if (popcount(st.mask & dm) >= 11) ge11++;
-          rawList.push({
-            nums: base,
-            rem: [],
-            add: [],
-            ge11,
-            stats: st
-          });
+          rawList.push({ nums, rem: [], add: extras, ge11, stats: st });
         }
         return rawList;
       }
@@ -1054,7 +1057,7 @@
               for (let d = 0; d < last10Masks.length; d++) {
                 const h = popcount(st.mask & last10Masks[d]);
                 totH += h;
-                if (h >= 11 + extraBalls) ge11++;
+                if (h >= 11) ge11++;
               }
               for (const x of newNums) wSum += numWeight[x];
               const avgH = totH / last10Masks.length;
@@ -1068,6 +1071,33 @@
               const score = ge11 * 2.2 + avgH * 3.5 + wSum * 1.2 + bioBonus - kRem * 0.15;
               cands.push({ score, ge11, avgH, nums: newNums, rem, add, stats: st });
             }
+          }
+        }
+
+        // Fallback: se os filtros biométricos ficarem restritivos demais,
+        // ainda produz cartões válidos em quantidade exata (15 a 20 dezenas).
+        if (cands.length === 0) {
+          const fallbackRng = createRng(7301 + seedOffset * 997 + idx * 131 + kDezenas);
+          for (let attempt = 0; attempt < 600; attempt++) {
+            const nums = Array.from({ length: 25 }, (_, j) => j + 1)
+              .map(n => ({ n, score: numWeight[n] + fallbackRng() * 0.22 }))
+              .sort((a, b) => b.score - a.score)
+              .slice(0, kDezenas)
+              .map(x => x.n)
+              .sort((a, b) => a - b);
+            const st = computeCardStats(nums, lastDrawMask);
+            if (existingMasks.has(st.mask) || cands.some(x => x.stats.mask === st.mask)) continue;
+            let ge11 = 0, totH = 0, wSum = 0;
+            for (const dm of last10Masks) {
+              const h = popcount(st.mask & dm);
+              totH += h;
+              if (h >= 11) ge11++;
+            }
+            for (const n of nums) wSum += numWeight[n];
+            const avgH = last10Masks.length ? totH / last10Masks.length : 0;
+            const score = ge11 * 2.2 + avgH * 3.5 + wSum * 1.2;
+            cands.push({ score, ge11, avgH, nums, rem: [], add: [], stats: st });
+            if (cands.length >= 180) break;
           }
         }
 
@@ -1094,7 +1124,16 @@
         pickSlice(x => x.stats.rep === b.repMin, 30);
         pickSlice(() => true, 80);
 
-        candidatesPerSlot.push(stratified.length > 0 ? stratified : cands.slice(0, 120));
+        const slotPool = stratified.length > 0 ? stratified : cands.slice(0, 120);
+        if (!slotPool.length) {
+          const fallbackNums = Array.from({ length: 25 }, (_, j) => j + 1)
+            .sort((a, b) => (numWeight[b] || 0) - (numWeight[a] || 0))
+            .slice(0, kDezenas)
+            .sort((a, b) => a - b);
+          const fallbackStats = computeCardStats(fallbackNums, lastDrawMask);
+          slotPool.push({ score: 0, ge11: 0, avgH: 0, nums: fallbackNums, rem: [], add: [], stats: fallbackStats });
+        }
+        candidatesPerSlot.push(slotPool);
       }
 
       // Otimização Global de Portfólio com Cotas Estratificadas
@@ -1289,6 +1328,10 @@
       const nGames = Math.max(1, Math.min(50, parseInt(document.getElementById('inputQtdJogos').value, 10) || 10));
       const kDezenas = parseInt(document.getElementById('selectDezenas').value, 10) || 15;
       const mode = document.getElementById('selectModo').value;
+      if (kDezenas < 15 || kDezenas > 20) {
+        showToast('Selecione entre 15 e 20 dezenas por cartão.');
+        return;
+      }
 
       // Filtra jogos já salvos para este concurso alvo
       const existingForConc = savedCsvRows.filter(r => r.concurso_alvo === concAlvo);
@@ -1302,6 +1345,10 @@
         existingMasks,
         existingForConc.length
       );
+      if (!Array.isArray(portfolio) || portfolio.length !== nGames || portfolio.some(g => !Array.isArray(g.nums) || g.nums.length !== kDezenas || new Set(g.nums).size !== kDezenas)) {
+        showToast(`Falha na geração: o motor não retornou ${nGames} jogos com exatamente ${kDezenas} dezenas. Nenhum palpite foi salvo.`);
+        return;
+      }
       currentBatchGames = portfolio;
 
       // Cobertura Exata nos 3.268.760 sorteios
@@ -1631,9 +1678,13 @@
 
     function clearSavedSequence() {
       savedCsvRows = [];
+      currentBatchGames = [];
       saveStateToStorage();
-      runOmegaGenerator(true);
-      showToast('Sequência reiniciada a partir do Jogo 01!');
+      refreshCsvTextarea();
+      document.getElementById('lblSeqCount').textContent = '0 jogos salvos';
+      document.getElementById('headerRangeTag').textContent = 'Aguardando geração manual';
+      document.getElementById('tbodyGames').innerHTML = '<tr><td colspan="10" class="py-8 text-center text-slate-500">Clique em “Gerar jogos agora” para criar um novo lote.</td></tr>';
+      showToast('Histórico de palpites limpo. Nenhum jogo foi gerado.');
     }
 
     function addManualDraw() {
@@ -1651,8 +1702,7 @@
       document.getElementById('inputConcursoAlvo').value = drawHistory[drawHistory.length - 1].concurso + 1;
       document.getElementById('inputNewConc').value = drawHistory[drawHistory.length - 1].concurso + 1;
       document.getElementById('inputNewBalls').value = '';
-      runOmegaGenerator(false);
-      showToast(`Concurso ${conc} adicionado e jogos recalibrados!`);
+      showToast(`Concurso ${conc} adicionado. Clique em “Gerar jogos agora” para criar os palpites recalibrados.`);
     }
 
     async function fetchLatestDrawsOnline() {
@@ -1671,8 +1721,8 @@
             const nextC = drawHistory[drawHistory.length - 1].concurso + 1;
             document.getElementById('inputConcursoAlvo').value = nextC;
             document.getElementById('inputNewConc').value = nextC;
-            runOmegaGenerator(false);
-            showToast(`Sincronizado até o Concurso ${nextC - 1}!`);
+            refreshCsvTextarea();
+            showToast(`Sorteios sincronizados até o Concurso ${nextC - 1}. Clique em “Gerar jogos agora” quando quiser criar os palpites.`);
             return;
           }
         }
@@ -2194,7 +2244,10 @@
         document.getElementById('inputConfDezenas').value = lastD.dezenas.map(x => String(x).padStart(2, '0')).join(' ');
       }
       renderConfBallSelector();
-      runOmegaGenerator(savedCsvRows.length === 0);
+      updateCostPreview();
+      refreshCsvTextarea();
+      document.getElementById('tbodyGames').innerHTML = '<tr><td colspan="10" class="py-8 text-center text-slate-500">Nenhum lote novo foi gerado. Configure o concurso, a quantidade de jogos e as dezenas; depois clique em “Gerar jogos agora”.</td></tr>';
+      document.getElementById('headerRangeTag').textContent = 'Aguardando geração manual';
       populateConfDropdowns();
       const latestSavedTarget = savedCsvRows.length
         ? Math.max(...savedCsvRows.map(r => Number(r.concurso_alvo) || 0))
@@ -2203,8 +2256,6 @@
       if (confSelect && latestSavedTarget) {
         confSelect.value = String(latestSavedTarget);
         onChangeConfConcurso();
-      } else {
-        executarConferenciaCompleta(true);
       }
     });
   </script>

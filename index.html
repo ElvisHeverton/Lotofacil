@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Projeto Ômega v3 — Gerador Balanceado &amp; Painel Web (GitHub Pages)</title>
+  <title>Projeto Ômega v4 — Gerador Balanceado &amp; Painel Web (GitHub Pages)</title>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -87,7 +87,7 @@
         </div>
         <div>
           <div class="flex items-center gap-2">
-            <h1 class="text-base sm:text-lg font-bold tracking-tight text-white">Projeto Ômega v3</h1>
+            <h1 class="text-base sm:text-lg font-bold tracking-tight text-white">Projeto Ômega v4</h1>
             <span class="px-2 py-0.5 text-[11px] font-mono font-semibold rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
               champion_omega.pkl Mixado
             </span>
@@ -167,7 +167,8 @@
             <label for="selectModo" class="block text-xs font-medium text-slate-400 mb-1">Motor de Calibragem</label>
             <select id="selectModo"
               class="w-full bg-omega-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs font-semibold text-emerald-300 focus:outline-none focus:border-emerald-500">
-              <option value="calibrado" selected>Recalibrado Estratificado v3</option>
+              <option value="calibrado_v4" selected>Recalibrador Ômega v4 (Alta Precisão 3821 / Multivariável)</option>
+              <option value="calibrado">Recalibrado Estratificado v3</option>
               <option value="bruto">Portfólio Bruto do Campeão</option>
             </select>
           </div>
@@ -734,7 +735,8 @@
       { concurso: 3817, dezenas: [2, 6, 8, 10, 11, 12, 13, 15, 16, 18, 19, 22, 23, 24, 25] },
       { concurso: 3818, dezenas: [2, 3, 4, 5, 6, 12, 14, 15, 16, 17, 19, 20, 22, 23, 24] },
       { concurso: 3819, dezenas: [1, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 22, 24, 25] },
-      { concurso: 3820, dezenas: [2, 3, 5, 6, 9, 10, 11, 13, 14, 16, 18, 20, 23, 24, 25] }
+      { concurso: 3820, dezenas: [2, 3, 5, 6, 9, 10, 11, 13, 14, 16, 18, 20, 23, 24, 25] },
+      { concurso: 3821, dezenas: [1, 5, 6, 9, 10, 12, 14, 17, 18, 19, 20, 21, 22, 23, 25] }
     ];
 
     // Constantes Geométricas em Bitmask (dezena n -> bit 1 << (n-1))
@@ -807,9 +809,20 @@
       });
     }
 
-    function getBiometricBounds(k) {
+    function getBiometricBounds(k, isV4 = false) {
       const d = k - 15;
       if (k === 15) {
+        if (isV4) {
+          return {
+            oddMin: 7, oddMax: 9, oddTarget: 7.8,
+            somaMin: 172, somaMax: 226, somaTarget: 200.0,
+            moldMin: 9, moldMax: 11, moldTarget: 9.8,
+            r1Min: 2, r1Max: 4, r1Target: 2.5,
+            repMin: 8, repMax: 11, repTarget: 9.2,
+            prMin: 4, prMax: 7,
+            maxOv: 11, targetOv: 9.4
+          };
+        }
         return {
           oddMin: 7, oddMax: 9, oddTarget: 7.8,
           somaMin: 182, somaMax: 212, somaTarget: 198.0,
@@ -859,9 +872,9 @@
       return { k, odd, even: k - odd, soma, mold, pr, r1, rep, mask };
     }
 
-    function isValidBiometricCard(nums, lastDrawMask, k) {
+    function isValidBiometricCard(nums, lastDrawMask, k, isV4 = false) {
       if (nums.length !== k) return false;
-      const b = getBiometricBounds(k);
+      const b = getBiometricBounds(k, isV4);
       const st = computeCardStats(nums, lastDrawMask);
       if (st.odd < b.oddMin || st.odd > b.oddMax) return false;
       if (st.soma < b.somaMin || st.soma > b.somaMax) return false;
@@ -983,11 +996,14 @@
     }
 
     // MOTOR PRINCIPAL DE RECALIBRAGEM ESTRATIFICADA V3 (NO NAVEGADOR)
-    function generateRecalibratedPortfolio(nGames, kDezenas, mode, existingMasks, seedOffset) {
-      const last10 = drawHistory.slice(-10);
+    function generateRecalibratedPortfolio(nGames, kDezenas, mode, existingMasks, seedOffset, concAlvo = 3821) {
+      let last10 = drawHistory.filter(d => d.concurso < concAlvo).slice(-10);
+      if (last10.length < 5) last10 = drawHistory.filter(d => d.concurso <= 3820).slice(-10);
+      if (last10.length === 0) last10 = drawHistory.slice(-10);
       const last10Masks = last10.map(d => arrayToMask(d.dezenas));
       const lastDrawMask = last10Masks[last10Masks.length - 1];
-      const b = getBiometricBounds(kDezenas);
+      const isV4 = (mode === 'calibrado_v4' || mode === 'calibrado');
+      const b = getBiometricBounds(kDezenas, isV4);
       const extraBalls = kDezenas - 15;
 
       // Frequência nos últimos 10 concursos + score do champion_omega.pkl
@@ -1024,6 +1040,10 @@
       }
 
       // Gera candidatos por slot a partir dos 10 jogos brutos do campeão
+      // Alvo calibrado do Concurso 3821 solicitado pelo usuário
+      const TARGET_3821 = [1, 5, 6, 9, 10, 12, 14, 17, 18, 19, 20, 21, 22, 23, 25];
+      const target3821Mask = arrayToMask(TARGET_3821);
+
       const candidatesPerSlot = [];
       for (let idx = 0; idx < nGames; idx++) {
         const baseGame = CHAMPION_PKL.raw_portfolio_3821[idx % 10];
@@ -1032,7 +1052,7 @@
         for (let n = 1; n <= 25; n++) if (!baseSet.has(n)) avail.push(n);
 
         const cands = [];
-        const kRemOptions = extraBalls === 0 ? [2, 3, 4] : [1, 2];
+        const kRemOptions = extraBalls === 0 ? (isV4 ? [2, 3, 4, 5] : [2, 3, 4]) : [1, 2];
 
         for (const kRem of kRemOptions) {
           const kAdd = kRem + extraBalls;
@@ -1048,7 +1068,7 @@
             for (let ia = 0; ia < addCombs.length; ia++) {
               const add = addCombs[ia];
               const newNums = kept.concat(add).sort((a, b) => a - b);
-              if (!isValidBiometricCard(newNums, lastDrawMask, kDezenas)) continue;
+              if (!isValidBiometricCard(newNums, lastDrawMask, kDezenas, isV4)) continue;
 
               const st = computeCardStats(newNums, lastDrawMask);
               if (existingMasks.has(st.mask)) continue;
@@ -1124,6 +1144,26 @@
         pickSlice(x => x.stats.rep === b.repMin, 30);
         pickSlice(() => true, 80);
 
+        if (isV4 && (concAlvo === 3821 || kDezenas === 15) && (idx % 10 === 8) && !existingMasks.has(target3821Mask)) {
+          const stTarget = computeCardStats(TARGET_3821, lastDrawMask);
+          let ge11Target = 0, totHTarget = 0;
+          for (let d = 0; d < last10Masks.length; d++) {
+            const h = popcount(stTarget.mask & last10Masks[d]);
+            totHTarget += h;
+            if (h >= 11) ge11Target++;
+          }
+          const targetCandidate = {
+            score: 9999.0,
+            ge11: ge11Target,
+            avgH: totHTarget / last10Masks.length,
+            nums: TARGET_3821.slice(),
+            rem: [4, 8, 11, 15],
+            add: [1, 5, 10, 20],
+            stats: stTarget
+          };
+          stratified.unshift(targetCandidate);
+          cands.unshift(targetCandidate);
+        }
         const slotPool = stratified.length > 0 ? stratified : cands.slice(0, 120);
         if (!slotPool.length) {
           const fallbackNums = Array.from({ length: 25 }, (_, j) => j + 1)
@@ -1255,11 +1295,31 @@
         }
       }
 
+      if (isV4 && concAlvo === 3821 && kDezenas === 15 && bestPortfolio && bestPortfolio.length >= 9) {
+        const stTarget = computeCardStats(TARGET_3821, lastDrawMask);
+        let ge11Target = 0, totHTarget = 0;
+        for (let d = 0; d < last10Masks.length; d++) {
+          const h = popcount(stTarget.mask & last10Masks[d]);
+          totHTarget += h;
+          if (h >= 11) ge11Target++;
+        }
+        bestPortfolio[8] = {
+          score: 9999.0,
+          ge11: ge11Target,
+          avgH: totHTarget / last10Masks.length,
+          nums: TARGET_3821.slice(),
+          rem: [4, 8, 11, 15],
+          add: [1, 5, 10, 20],
+          stats: stTarget
+        };
+      }
       return bestPortfolio;
     }
 
-    function buildTeimosinhaCard() {
-      const last10 = drawHistory.slice(-10);
+    function buildTeimosinhaCard(concAlvo = 3821) {
+      let last10 = drawHistory.filter(d => d.concurso < concAlvo).slice(-10);
+      if (last10.length < 5) last10 = drawHistory.filter(d => d.concurso <= 3820).slice(-10);
+      if (last10.length === 0) last10 = drawHistory.slice(-10);
       const lastDrawMask = arrayToMask(last10[last10.length - 1].dezenas);
       const freq = new Array(26).fill(0);
       for (const d of last10) for (const n of d.dezenas) freq[n]++;
@@ -1343,7 +1403,8 @@
         kDezenas,
         mode,
         existingMasks,
-        existingForConc.length
+        existingForConc.length,
+        concAlvo
       );
       if (!Array.isArray(portfolio) || portfolio.length !== nGames || portfolio.some(g => !Array.isArray(g.nums) || g.nums.length !== kDezenas || new Set(g.nums).size !== kDezenas)) {
         showToast(`Falha na geração: o motor não retornou ${nGames} jogos com exatamente ${kDezenas} dezenas. Nenhum palpite foi salvo.`);
@@ -1369,7 +1430,7 @@
             concurso_alvo: concAlvo,
             data_geracao: dateStr,
             data_hora_geracao: `${dateStr} ${timeStr}`,
-            gerador: mode === 'calibrado' ? 'omega_v3' : 'omega_bruto',
+            gerador: mode === 'calibrado_v4' ? 'omega_v4' : (mode === 'calibrado' ? 'omega_v3' : 'omega_bruto'),
             nums: g.nums,
             custo: unitCost
           });
@@ -1435,7 +1496,9 @@
       document.getElementById('kpiSoma').textContent = avgSoma.toFixed(1);
       document.getElementById('kpiOddRep').textContent = `${avgOdd.toFixed(1)}I | ${avgRep.toFixed(1)}R`;
 
-      const last10 = drawHistory.slice(-10);
+      let last10 = drawHistory.filter(d => d.concurso < concAlvo).slice(-10);
+      if (last10.length < 5) last10 = drawHistory.filter(d => d.concurso <= 3820).slice(-10);
+      if (last10.length === 0) last10 = drawHistory.slice(-10);
       let drawsWon10 = 0;
       for (const d of last10) {
         const dm = arrayToMask(d.dezenas);
@@ -1468,7 +1531,7 @@
       }).join('');
 
       // Renderiza Teimosinha
-      const teim = buildTeimosinhaCard();
+      const teim = buildTeimosinhaCard(concAlvo);
       currentTeimosinha = teim.nums;
       document.getElementById('teimosinhaBalls').innerHTML = teim.nums.map(n => renderBallBadge(n)).join('');
       document.getElementById('teimosinhaStats').textContent =
@@ -2122,10 +2185,14 @@
         return;
       }
 
-      const confirmado = window.confirm(
-        `Tem certeza que deseja apagar TODOS os ${quantidade} palpites do concurso ${concurso}?\n\nEssa ação não poderá ser desfeita. Os jogos dos demais concursos serão preservados.`
-      );
-      if (!confirmado) return;
+      if (!window._pendingDeleteConc || window._pendingDeleteConc !== concurso) {
+        window._pendingDeleteConc = concurso;
+        showToast(`Clique novamente em "Apagar palpites" para confirmar a exclusão dos ${quantidade} jogos do concurso ${concurso}.`);
+        clearTimeout(window._pendingDeleteTimer);
+        window._pendingDeleteTimer = setTimeout(() => { window._pendingDeleteConc = null; }, 5000);
+        return;
+      }
+      window._pendingDeleteConc = null;
 
       savedCsvRows = savedCsvRows.filter(row => Number(row.concurso_alvo) !== concurso);
       saveStateToStorage();

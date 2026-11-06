@@ -167,7 +167,7 @@
             <label for="selectModo" class="block text-xs font-medium text-slate-400 mb-1">Motor de Calibragem</label>
             <select id="selectModo"
               class="w-full bg-omega-950 border border-slate-700/80 rounded-xl px-3 py-2 text-xs font-semibold text-emerald-300 focus:outline-none focus:border-emerald-500">
-              <option value="calibrado_v4" selected>Recalibrador Ômega v4 (Alta Precisão 3821 / Multivariável)</option>
+              <option value="calibrado_v4" selected>Recalibrador Ômega v4.1 (3821 + Ajuste Fino 5 Regiões/Quadrantes)</option>
               <option value="calibrado">Recalibrado Estratificado v3</option>
               <option value="bruto">Portfólio Bruto do Campeão</option>
             </select>
@@ -300,6 +300,7 @@
                 <th class="py-3 px-3 text-center">Soma</th>
                 <th class="py-3 px-3 text-center">Moldura</th>
                 <th class="py-3 px-3 text-center">Linha 1</th>
+                <th class="py-3 px-3 text-center" title="Q1(NO)·Q2(NE)·Q3(SO)·Q4(SE) + Cruz Central">Quadrantes + C</th>
                 <th class="py-3 px-3 text-center">Rep. Últ</th>
                 <th class="py-3 px-3 text-center">Primos</th>
                 <th class="py-3 px-3 text-center">Últ. 10</th>
@@ -756,6 +757,13 @@
       (1<<3)|(1<<8)|(1<<13)|(1<<18)|(1<<23),
       (1<<4)|(1<<9)|(1<<14)|(1<<19)|(1<<24)
     ];
+    // Máscaras Topológicas de 5 Regiões (4 Quadrantes 2x2 + Cruz Central de 9 dezenas)
+    const Q1_MASK = (1<<0)|(1<<1)|(1<<5)|(1<<6);       // Noroeste: 01, 02, 06, 07
+    const Q2_MASK = (1<<3)|(1<<4)|(1<<8)|(1<<9);       // Nordeste: 04, 05, 09, 10
+    const Q3_MASK = (1<<15)|(1<<16)|(1<<20)|(1<<21);   // Sudoeste: 16, 17, 21, 22
+    const Q4_MASK = (1<<18)|(1<<19)|(1<<23)|(1<<24);   // Sudeste:  19, 20, 24, 25
+    const QC_MASK = (1<<2)|(1<<7)|(1<<10)|(1<<11)|(1<<12)|(1<<13)|(1<<14)|(1<<17)|(1<<22); // Cruz Central: 03, 08, 11..15, 18, 23
+    const QUAD_MASKS = [Q1_MASK, Q2_MASK, Q3_MASK, Q4_MASK];
 
     // Estado em memória + persistência segura
     let savedCsvRows = [];
@@ -869,7 +877,12 @@
         if (n <= 5) r1++;
       }
       const rep = lastDrawMask ? popcount(mask & lastDrawMask) : 9;
-      return { k, odd, even: k - odd, soma, mold, pr, r1, rep, mask };
+      const q1 = popcount(mask & Q1_MASK);
+      const q2 = popcount(mask & Q2_MASK);
+      const q3 = popcount(mask & Q3_MASK);
+      const q4 = popcount(mask & Q4_MASK);
+      const qc = popcount(mask & QC_MASK);
+      return { k, odd, even: k - odd, soma, mold, pr, r1, rep, q1, q2, q3, q4, qc, mask };
     }
 
     function isValidBiometricCard(nums, lastDrawMask, k, isV4 = false) {
@@ -1313,7 +1326,95 @@
           stats: stTarget
         };
       }
+      if (isV4 && bestPortfolio) {
+        applyTopologicalFineTuning(bestPortfolio, lastDrawMask, last10Masks, numWeight, kDezenas, existingMasks);
+      }
       return bestPortfolio;
+    }
+
+    // Camada Pós-Portfólio: Auto-Healing Topológico de 5 Regiões (Quadrantes Q1..Q4 >= 1 e Cruz Central 4..7)
+    // Preserva 100% da trajetória PRNG do motor v4 (mantendo o acerto do 3821 e os 9 jogos aprovados do 3822)
+    // e corrige cirurgicamente qualquer cartão com quadrante zerado (ex: Jogo 05 trocando 02 -> 05).
+    function applyTopologicalFineTuning(portfolio, lastDrawMask, last10Masks, numWeight, kDezenas, existingMasks) {
+      const qcMax = kDezenas === 15 ? 7 : Math.min(9, 7 + Math.ceil((kDezenas - 15) * 0.5));
+      const usedMasks = new Set(existingMasks);
+      portfolio.forEach(g => usedMasks.add(g.stats.mask));
+
+      for (let idx = 0; idx < portfolio.length; idx++) {
+        const g = portfolio[idx];
+        const st0 = g.stats;
+        const hasEmptyQuad = (st0.q1 === 0 || st0.q2 === 0 || st0.q3 === 0 || st0.q4 === 0);
+        const badCenter = (st0.qc < 4 || st0.qc > qcMax);
+        if (!hasEmptyQuad && !badCenter) continue;
+
+        const curSet = new Set(g.nums);
+        const colCounts = [0, 0, 0, 0, 0];
+        for (const n of g.nums) colCounts[(n - 1) % 5]++;
+        const qCounts = [st0.q1, st0.q2, st0.q3, st0.q4];
+
+        let bestFix = null;
+        let bestFixScore = -1e9;
+
+        for (const rem of g.nums) {
+          const remBit = 1 << (rem - 1);
+          let remQuadIdx = -1;
+          for (let q = 0; q < 4; q++) {
+            if (remBit & QUAD_MASKS[q]) remQuadIdx = q;
+          }
+          if (remQuadIdx !== -1 && qCounts[remQuadIdx] <= 1) continue;
+          if (remQuadIdx === -1 && st0.qc <= 4) continue;
+
+          for (let add = 1; add <= 25; add++) {
+            if (curSet.has(add)) continue;
+            const newNums = g.nums.filter(x => x !== rem).concat([add]).sort((a, b) => a - b);
+            if (!isValidBiometricCard(newNums, lastDrawMask, kDezenas, true)) continue;
+
+            const st = computeCardStats(newNums, lastDrawMask);
+            if (usedMasks.has(st.mask)) continue;
+            if (st.q1 === 0 || st.q2 === 0 || st.q3 === 0 || st.q4 === 0) continue;
+            if (st.qc < 4 || st.qc > qcMax) continue;
+
+            const colRem = colCounts[(rem - 1) % 5];
+            const colAdd = colCounts[(add - 1) % 5];
+            const sameRowBonus = (Math.floor((rem - 1) / 5) === Math.floor((add - 1) / 5)) ? 4.5 : 0;
+            const colBalanceBonus = (colRem >= 4 ? 3.5 : 0) + (colAdd <= 2 ? 3.5 : 0) + (colRem - colAdd) * 1.5;
+            const parityBonus = (st.odd === 8) ? 3.0 : 0;
+            const quadSpreadBonus = -((st.q1 - 2.25) ** 2 + (st.q2 - 2.25) ** 2 + (st.q3 - 2.25) ** 2 + (st.q4 - 2.25) ** 2) * 1.2;
+
+            let ge11 = 0, totH = 0;
+            for (const dm of last10Masks) {
+              const h = popcount(st.mask & dm);
+              totH += h;
+              if (h >= 11) ge11++;
+            }
+            const weightDelta = ((numWeight[add] || 0.5) - (numWeight[rem] || 0.5)) * 4.0;
+            const fixScore = sameRowBonus + colBalanceBonus + parityBonus + quadSpreadBonus + weightDelta + ge11 * 1.5 + (totH / last10Masks.length);
+
+            if (fixScore > bestFixScore) {
+              bestFixScore = fixScore;
+              bestFix = { nums: newNums, st, ge11, avgH: totH / last10Masks.length, remBall: rem, addBall: add };
+            }
+          }
+        }
+
+        if (bestFix) {
+          usedMasks.delete(st0.mask);
+          usedMasks.add(bestFix.st.mask);
+          const baseGame = CHAMPION_PKL.raw_portfolio_3821[idx % 10];
+          const baseSet = new Set(baseGame);
+          const newSet = new Set(bestFix.nums);
+          portfolio[idx] = {
+            score: g.score,
+            ge11: bestFix.ge11,
+            avgH: bestFix.avgH,
+            nums: bestFix.nums,
+            rem: baseGame.filter(x => !newSet.has(x)),
+            add: bestFix.nums.filter(x => !baseSet.has(x)),
+            microFix: `${String(bestFix.remBall).padStart(2, '0')}→${String(bestFix.addBall).padStart(2, '0')}`,
+            stats: bestFix.st
+          };
+        }
+      }
     }
 
     function buildTeimosinhaCard(concAlvo = 3821) {
@@ -1511,9 +1612,13 @@
       tbody.innerHTML = portfolio.map((g, idx) => {
         const seqNum = String(startSeq + idx).padStart(2, '0');
         const ballsHtml = g.nums.map(n => renderBallBadge(n)).join(' ');
+        const microTag = g.microFix
+          ? ` <span class="ml-1 px-1.5 py-0.5 text-[10px] rounded bg-amber-500/20 text-amber-300 border border-amber-500/40" title="Auto-ajuste fino de quadrante aplicado">Q-Fix ${g.microFix}</span>`
+          : '';
         const swapHtml = (g.rem && g.rem.length > 0)
-          ? `<span class="text-rose-400 font-mono">[${g.rem.map(x => String(x).padStart(2, '0')).join(' ')}]</span> &rarr; <span class="text-emerald-400 font-mono">[${g.add.map(x => String(x).padStart(2, '0')).join(' ')}]</span>`
+          ? `<span class="text-rose-400 font-mono">[${g.rem.map(x => String(x).padStart(2, '0')).join(' ')}]</span> &rarr; <span class="text-emerald-400 font-mono">[${g.add.map(x => String(x).padStart(2, '0')).join(' ')}]</span>${microTag}`
           : `<span class="text-slate-500 font-mono">Original sem troca</span>`;
+        const quadHtml = `<span class="px-2 py-0.5 rounded bg-slate-800/90 text-teal-300 font-mono text-[11px] border border-slate-700">${g.stats.q1}·${g.stats.q2}·${g.stats.q3}·${g.stats.q4} <strong class="text-indigo-300">+${g.stats.qc}C</strong></span>`;
         return `
           <tr class="hover:bg-slate-800/40 transition">
             <td class="py-3 px-4 font-mono font-bold text-emerald-400 whitespace-nowrap">Jogo ${seqNum}</td>
@@ -1522,6 +1627,7 @@
             <td class="py-3 px-3 text-center font-mono font-semibold text-white">${g.stats.soma}</td>
             <td class="py-3 px-3 text-center font-mono text-indigo-300">${g.stats.mold}</td>
             <td class="py-3 px-3 text-center font-mono text-emerald-300">${g.stats.r1}</td>
+            <td class="py-3 px-3 text-center whitespace-nowrap">${quadHtml}</td>
             <td class="py-3 px-3 text-center font-mono text-amber-300">${g.stats.rep}</td>
             <td class="py-3 px-3 text-center font-mono text-slate-300">${g.stats.pr}</td>
             <td class="py-3 px-3 text-center font-mono font-bold text-emerald-400">${g.ge11}/10</td>
@@ -1550,7 +1656,8 @@
       portfolio.forEach((g, idx) => {
         const sNum = String(startSeq + idx).padStart(2, '0');
         const bStr = g.nums.map(x => String(x).padStart(2, '0')).join(' ');
-        lines.push(`Jogo ${sNum}: [ ${bStr} ] | ${g.stats.odd}I/${g.stats.even}P | Soma=${g.stats.soma} | Mold=${g.stats.mold} | L1=${g.stats.r1} | Rep=${g.stats.rep} | Ult10=${g.ge11}/10`);
+        const qStr = `${g.stats.q1}.${g.stats.q2}.${g.stats.q3}.${g.stats.q4}+${g.stats.qc}C`;
+        lines.push(`Jogo ${sNum}: [ ${bStr} ] | ${g.stats.odd}I/${g.stats.even}P | Soma=${g.stats.soma} | Mold=${g.stats.mold} | L1=${g.stats.r1} | Q=${qStr} | Rep=${g.stats.rep} | Ult10=${g.ge11}/10`);
       });
       lines.push("--------------------------------------------------------------------------");
       const tStr = teim.nums.map(x => String(x).padStart(2, '0')).join(' ');
@@ -1746,7 +1853,7 @@
       refreshCsvTextarea();
       document.getElementById('lblSeqCount').textContent = '0 jogos salvos';
       document.getElementById('headerRangeTag').textContent = 'Aguardando geração manual';
-      document.getElementById('tbodyGames').innerHTML = '<tr><td colspan="10" class="py-8 text-center text-slate-500">Clique em “Gerar jogos agora” para criar um novo lote.</td></tr>';
+      document.getElementById('tbodyGames').innerHTML = '<tr><td colspan="11" class="py-8 text-center text-slate-500">Clique em “Gerar jogos agora” para criar um novo lote.</td></tr>';
       showToast('Histórico de palpites limpo. Nenhum jogo foi gerado.');
     }
 
@@ -2475,7 +2582,7 @@
       }
       renderConfBallSelector();
       refreshCsvTextarea();
-      document.getElementById('tbodyGames').innerHTML = '<tr><td colspan="10" class="py-8 text-center text-slate-500">Nenhum lote novo foi gerado. Configure o concurso, a quantidade de jogos e as dezenas; depois clique em “Gerar jogos agora”.</td></tr>';
+      document.getElementById('tbodyGames').innerHTML = '<tr><td colspan="11" class="py-8 text-center text-slate-500">Nenhum lote novo foi gerado. Configure o concurso, a quantidade de jogos e as dezenas; depois clique em “Gerar jogos agora”.</td></tr>';
       document.getElementById('headerRangeTag').textContent = 'Aguardando geração manual';
       populateConfDropdowns();
 
